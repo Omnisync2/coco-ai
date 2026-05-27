@@ -18,19 +18,27 @@ async function setupCamera() {
 }
 
 async function detect() {
-    const predictions = await model.detect(video, 20, 0.3);
+    // Threshold 0.2 makes it more sensitive
+    const predictions = await model.detect(video, 20, 0.2);
     
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     objectsList.innerHTML = '';
 
     if (predictions.length > 0) {
         const topObject = predictions[0].class;
-        
-        if (topObject !== lastSpoken) {
+        const confidence = predictions[0].score;
+
+        // If high confidence, speak the object
+        if (confidence > 0.4 && topObject !== lastSpoken) {
             window.speechSynthesis.cancel();
-            const utterance = new SpeechSynthesisUtterance(topObject);
-            window.speechSynthesis.speak(utterance);
+            window.speechSynthesis.speak(new SpeechSynthesisUtterance(topObject));
             lastSpoken = topObject;
+        } 
+        // If it sees something but is confused (low confidence), say "Unidentified"
+        else if (confidence <= 0.4 && lastSpoken !== "unidentified") {
+            window.speechSynthesis.cancel();
+            window.speechSynthesis.speak(new SpeechSynthesisUtterance("Unidentified object"));
+            lastSpoken = "unidentified";
         }
 
         predictions.forEach(prediction => {
@@ -38,7 +46,12 @@ async function detect() {
             ctx.strokeStyle = '#00ff00';
             ctx.lineWidth = 4;
             ctx.strokeRect(x, y, width, height);
+            const li = document.createElement('li');
+            li.innerText = prediction.class;
+            objectsList.appendChild(li);
         });
+    } else {
+        lastSpoken = ""; // Reset when nothing is seen
     }
     requestAnimationFrame(detect);
 }
