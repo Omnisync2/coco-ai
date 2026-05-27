@@ -9,34 +9,19 @@ const objectsList = document.getElementById('objects-list');
 let model;
 let lastSpoken = "";
 let history = [];
-let selectedLang = 'en-US'; // Default
-
-// Translation Dictionary
-const translations = {
-    "cup": { "es-ES": "taza", "en-US": "cup" },
-    "person": { "es-ES": "persona", "en-US": "person" },
-    "bottle": { "es-ES": "botella", "en-US": "bottle" },
-    "cell phone": { "es-ES": "teléfono celular", "en-US": "cell phone" },
-    "chair": { "es-ES": "silla", "en-US": "chair" },
-    "unidentified object": { "es-ES": "objeto no identificado", "en-US": "unidentified object" }
-};
 
 async function setupCamera() {
-    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+    const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: { facingMode: 'environment' },
+        audio: false // Explicitly disable audio for camera stream to avoid conflicts
+    });
     video.srcObject = stream;
     return new Promise((resolve) => { video.onloadedmetadata = resolve; });
 }
 
-function speak(text, isTranslation = false) {
+function speak(text) {
     window.speechSynthesis.cancel();
-    let speechText = text;
-    
-    if (isTranslation && translations[text.toLowerCase()]) {
-        speechText = translations[text.toLowerCase()][selectedLang] || text;
-    }
-    
-    const utterance = new SpeechSynthesisUtterance(speechText);
-    utterance.lang = selectedLang;
+    const utterance = new SpeechSynthesisUtterance(text);
     utterance.rate = 1.1;
     window.speechSynthesis.speak(utterance);
 }
@@ -50,8 +35,50 @@ function updateHistory(item) {
 }
 
 async function detect() {
+    if (!model) return;
     const predictions = await model.detect(video, 20, 0.2);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    if (predictions.length
+    if (predictions.length > 0) {
+        const topObject = predictions[0].class;
+        const confidence = predictions[0].score;
+
+        if (confidence > 0.4) {
+            if (topObject !== lastSpoken) {
+                speak(topObject);
+                lastSpoken = topObject;
+            }
+            updateHistory(topObject);
+        } else if (lastSpoken !== "unidentified") {
+            speak("unidentified object");
+            lastSpoken = "unidentified";
+        }
+        
+        predictions.forEach(p => {
+            const [x, y, w, h] = p.bbox;
+            ctx.strokeStyle = '#00ff00';
+            ctx.lineWidth = 4;
+            ctx.strokeRect(x, y, w, h);
+        });
+    } else { lastSpoken = ""; }
+    requestAnimationFrame(detect);
+}
+
+actionBtn.addEventListener('click', async () => {
+    actionBtn.style.display = 'none';
+    statusText.innerText = 'Initializing...';
+    speak("Starting system. Please wait.");
+    
+    try {
+        await setupCamera();
+        model = await cocoSsd.load({base: 'mobilenet_v2'});
+        statusDot.classList.add('ready');
+        statusText.innerText = 'Ready';
+        speak("System ready. Scanning.");
+        detect();
+    } catch (err) {
+        statusText.innerText = 'Error';
+        speak("Could not access camera. Please check permissions.");
+    }
+});
         
