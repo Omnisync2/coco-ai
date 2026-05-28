@@ -23,17 +23,20 @@ let speechLock = false;
 ========================= */
 
 async function setupCamera() {
+
     const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment' },
+        video: {
+            facingMode: 'environment'
+        },
         audio: false
     });
 
     video.srcObject = stream;
 
     return new Promise((resolve) => {
+
         video.onloadedmetadata = () => {
 
-            // IMPORTANT: FIX CANVAS SIZE
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
 
@@ -47,6 +50,7 @@ async function setupCamera() {
 ========================= */
 
 function speak(text) {
+
     if (speechLock) return;
 
     speechLock = true;
@@ -54,6 +58,7 @@ function speak(text) {
     window.speechSynthesis.cancel();
 
     const utterance = new SpeechSynthesisUtterance(text);
+
     utterance.rate = 1.1;
 
     utterance.onend = () => {
@@ -68,6 +73,7 @@ function speak(text) {
 ========================= */
 
 function updateHistory(item) {
+
     if (history[0] !== item) {
 
         history.unshift(item);
@@ -87,20 +93,31 @@ function updateHistory(item) {
 ========================= */
 
 function getBrightness(video) {
+
     const tempCanvas = document.createElement("canvas");
-    const ctx = tempCanvas.getContext("2d");
+    const tempCtx = tempCanvas.getContext("2d");
 
     tempCanvas.width = video.videoWidth;
     tempCanvas.height = video.videoHeight;
 
-    ctx.drawImage(video, 0, 0);
+    tempCtx.drawImage(video, 0, 0);
 
-    const frame = ctx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
+    const frame = tempCtx.getImageData(
+        0,
+        0,
+        tempCanvas.width,
+        tempCanvas.height
+    );
 
     let total = 0;
 
     for (let i = 0; i < frame.data.length; i += 4) {
-        total += (frame.data[i] + frame.data[i + 1] + frame.data[i + 2]) / 3;
+
+        total += (
+            frame.data[i] +
+            frame.data[i + 1] +
+            frame.data[i + 2]
+        ) / 3;
     }
 
     return total / (frame.data.length / 4);
@@ -115,6 +132,7 @@ async function detect(time) {
     if (!model) return;
 
     if (time - lastTime < interval) {
+
         requestAnimationFrame(detect);
         return;
     }
@@ -122,9 +140,10 @@ async function detect(time) {
     lastTime = time;
 
     /* LOW LIGHT WARNING */
+
     const brightness = getBrightness(video);
 
-    if (brightness < 45) {
+    if (brightness < 80) {
         warningOverlay.classList.add("show");
     } else {
         warningOverlay.classList.remove("show");
@@ -145,13 +164,25 @@ async function detect(time) {
 
         const [x, y, w, h] = top.bbox;
 
+        /* BETTER DISTANCE */
+
+        const area = w * h;
+
         let distance = "";
 
-        if (w < 120) distance = "far";
-        else if (w < 250) distance = "near";
-        else distance = "very close";
+        if (area < 50000) {
+            distance = "far";
+        }
+        else if (area < 150000) {
+            distance = "near";
+        }
+        else {
+            distance = "very close";
+        }
 
-        if (w > 320 && !speechLock) {
+        /* SPEECH */
+
+        if (area > 200000 && !speechLock) {
 
             if (lastSpoken !== "obstacle ahead") {
 
@@ -178,7 +209,7 @@ async function detect(time) {
         }
 
         /* =========================
-           PLUS SIGN MARKER (NEW)
+           HUD CORNER BOXES
         ========================= */
 
         predictions.forEach(p => {
@@ -187,39 +218,54 @@ async function detect(time) {
 
                 const [x, y, w, h] = p.bbox;
 
-                const centerX = x + w / 2;
-                const centerY = y + h / 2;
-
-                const size = 20;
+                const corner = 25;
 
                 ctx.strokeStyle = '#00ff00';
-                ctx.lineWidth = 3;
+                ctx.lineWidth = 4;
 
-                // horizontal line
+                // TOP LEFT
                 ctx.beginPath();
-                ctx.moveTo(centerX - size, centerY);
-                ctx.lineTo(centerX + size, centerY);
+                ctx.moveTo(x, y + corner);
+                ctx.lineTo(x, y);
+                ctx.lineTo(x + corner, y);
                 ctx.stroke();
 
-                // vertical line
+                // TOP RIGHT
                 ctx.beginPath();
-                ctx.moveTo(centerX, centerY - size);
-                ctx.lineTo(centerX, centerY + size);
+                ctx.moveTo(x + w - corner, y);
+                ctx.lineTo(x + w, y);
+                ctx.lineTo(x + w, y + corner);
                 ctx.stroke();
 
-                // label
+                // BOTTOM LEFT
+                ctx.beginPath();
+                ctx.moveTo(x, y + h - corner);
+                ctx.lineTo(x, y + h);
+                ctx.lineTo(x + corner, y + h);
+                ctx.stroke();
+
+                // BOTTOM RIGHT
+                ctx.beginPath();
+                ctx.moveTo(x + w - corner, y + h);
+                ctx.lineTo(x + w, y + h);
+                ctx.lineTo(x + w, y + h - corner);
+                ctx.stroke();
+
+                /* LABEL */
+
                 ctx.fillStyle = '#00ff00';
                 ctx.font = '16px Arial';
 
                 ctx.fillText(
                     `${p.class} ${(p.score * 100).toFixed(0)}%`,
-                    centerX + 25,
-                    centerY - 10
+                    x,
+                    y > 20 ? y - 10 : 20
                 );
             }
         });
 
     } else {
+
         lastSpoken = "";
     }
 
