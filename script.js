@@ -40,6 +40,7 @@ function updateHistory(item) {
 async function detect() {
     if (!model) return;
     
+    // Set canvas dimensions
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
 
@@ -48,14 +49,13 @@ async function detect() {
 
     if (predictions.length > 0) {
         const topObject = predictions[0].class;
-        const confidence = predictions[0].score;
         
-        if (confidence > 0.4) {
+        if (predictions[0].score > 0.4) {
             // DIRECTION AWARENESS LOGIC
             const [x, y, w, h] = predictions[0].bbox;
             const centerX = x + w / 2;
             let direction = "";
-
+            
             if (centerX < canvas.width / 3) {
                 direction = "on your left";
             } else if (centerX > (canvas.width / 3) * 2) {
@@ -65,7 +65,7 @@ async function detect() {
             }
 
             const message = `${topObject} ${direction}`;
-
+            
             if (message !== lastSpoken) {
                 speak(message);
                 lastSpoken = message;
@@ -80,8 +80,6 @@ async function detect() {
             ctx.lineWidth = 4;
             ctx.strokeRect(x, y, w, h);
         });
-    } else {
-        lastSpoken = "";
     }
     
     requestAnimationFrame(detect);
@@ -99,4 +97,3 @@ actionBtn.addEventListener('click', async () => {
         statusText.innerText = 'Error: ' + err.message;
     }
 });
-                
