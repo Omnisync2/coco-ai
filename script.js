@@ -81,4 +81,3 @@ actionBtn.addEventListener('click', async () => {
         speak("Could not access camera. Please check permissions.");
     }
 });
-    
