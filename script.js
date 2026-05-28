@@ -25,13 +25,11 @@ function speak(text) {
     window.speechSynthesis.speak(utterance);
 }
 
-// Fixed: This function now forces an update to the HTML list
 function updateHistory(item) {
     if (history[0] !== item) {
         history.unshift(item);
         if (history.length > 5) history.pop();
         
-        // This explicitly updates the DOM
         let html = '';
         history.forEach(i => { html += `<li>${i}</li>`; });
         objectsList.innerHTML = html;
@@ -58,12 +56,29 @@ async function detect() {
             lastSpoken = "unidentified";
         }
         
+        // Professional Crosshair Targeting
         predictions.forEach(p => {
             const [x, y, w, h] = p.bbox;
+            const centerX = x + w / 2;
+            const centerY = y + h / 2;
+            const size = 30; 
+
             ctx.strokeStyle = '#00ff00';
             ctx.lineWidth = 4;
-            ctx.strokeRect(x, y, w, h);
+            
+            // Draw horizontal line
+            ctx.beginPath();
+            ctx.moveTo(centerX - size, centerY);
+            ctx.lineTo(centerX + size, centerY);
+            ctx.stroke();
+
+            // Draw vertical line
+            ctx.beginPath();
+            ctx.moveTo(centerX, centerY - size);
+            ctx.lineTo(centerX, centerY + size);
+            ctx.stroke();
         });
+        
     } else { lastSpoken = ""; }
     requestAnimationFrame(detect);
 }
@@ -82,3 +97,4 @@ actionBtn.addEventListener('click', async () => {
         statusText.innerText = 'Error: Check Camera';
     }
 });
+                           
