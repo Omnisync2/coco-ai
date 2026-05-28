@@ -1,12 +1,20 @@
 <!DOCTYPE html>
 <html lang="zh">
+
 <head>
     <meta charset="UTF-8">
-    <title>Coco Vision AI</title>
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>Coco AI 视觉系统</title>
 
     <link rel="stylesheet" href="style.css">
 
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
 </head>
 
@@ -14,25 +22,56 @@
 
     <div class="app">
 
+        <!-- STATUS -->
+
         <div class="top-bar">
+
             <div id="status-dot"></div>
-            <div id="status-text">初始化中</div>
+
+            <div id="status-text">
+                初始化中
+            </div>
+
         </div>
 
-        <video id="webcam" autoplay playsinline></video>
+        <!-- CAMERA -->
+
+        <video
+            id="webcam"
+            autoplay
+            playsinline
+            muted
+        ></video>
+
+        <!-- AI OVERLAY -->
+
         <canvas id="output-canvas"></canvas>
 
-        <div id="camera-warning">光线不足</div>
+        <!-- LOW LIGHT -->
 
-        <button id="action-btn">开始摄像头</button>
+        <div id="camera-warning">
+            光线不足
+        </div>
+
+        <!-- START BUTTON -->
+
+        <button id="action-btn">
+            开始摄像头
+        </button>
+
+        <!-- HISTORY -->
 
         <div class="panel">
+
             <h3>检测记录</h3>
+
             <ul id="objects-list"></ul>
+
         </div>
 
     </div>
 
     <script src="script.js"></script>
+
 </body>
 </html>
