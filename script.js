@@ -38,7 +38,12 @@ function updateHistory(item) {
 
 async function detect() {
     if (!model) return;
-    const predictions = await model.detect(video, 20, 0.2);
+    
+    // Ensure canvas matches video size
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+
+    const predictions = await model.detect(video, 20, 0.4);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     if (predictions.length > 0) {
@@ -55,31 +60,27 @@ async function detect() {
             speak("unidentified");
             lastSpoken = "unidentified";
         }
-        
-        // Professional Crosshair Targeting
+
+        // Draw Corner Brackets
         predictions.forEach(p => {
             const [x, y, w, h] = p.bbox;
-            const centerX = x + w / 2;
-            const centerY = y + h / 2;
-            const size = 30; 
-
+            const len = 20; // Length of corner bracket
             ctx.strokeStyle = '#00ff00';
             ctx.lineWidth = 4;
-            
-            // Draw horizontal line
-            ctx.beginPath();
-            ctx.moveTo(centerX - size, centerY);
-            ctx.lineTo(centerX + size, centerY);
-            ctx.stroke();
 
-            // Draw vertical line
-            ctx.beginPath();
-            ctx.moveTo(centerX, centerY - size);
-            ctx.lineTo(centerX, centerY + size);
-            ctx.stroke();
+            // Top-left
+            ctx.beginPath(); ctx.moveTo(x, y + len); ctx.lineTo(x, y); ctx.lineTo(x + len, y); ctx.stroke();
+            // Top-right
+            ctx.beginPath(); ctx.moveTo(x + w - len, y); ctx.lineTo(x + w, y); ctx.lineTo(x + w, y + len); ctx.stroke();
+            // Bottom-left
+            ctx.beginPath(); ctx.moveTo(x, y + h - len); ctx.lineTo(x, y + h); ctx.lineTo(x + len, y + h); ctx.stroke();
+            // Bottom-right
+            ctx.beginPath(); ctx.moveTo(x + w - len, y + h); ctx.lineTo(x + w, y + h); ctx.lineTo(x + w, y + h - len); ctx.stroke();
         });
-        
-    } else { lastSpoken = ""; }
+    } else {
+        lastSpoken = "";
+    }
+    
     requestAnimationFrame(detect);
 }
 
@@ -92,9 +93,10 @@ actionBtn.addEventListener('click', async () => {
         model = await cocoSsd.load({base: 'mobilenet_v2'});
         statusText.innerText = 'System Ready';
         speak("System ready. Scanning.");
+        video.play();
         detect();
     } catch (err) {
-        statusText.innerText = 'Error: Check Camera';
+        statusText.innerText = 'Error: ' + err.message;
     }
 });
-                           
+                            
