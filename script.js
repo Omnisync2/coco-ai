@@ -3,14 +3,12 @@ const canvas = document.getElementById('output-canvas');
 const ctx = canvas.getContext('2d');
 const statusText = document.getElementById('status-text');
 const actionBtn = document.getElementById('action-btn');
-const resetBtn = document.getElementById('reset-btn');
-const historyBtn = document.getElementById('history-btn');
 const objectsList = document.getElementById('objects-list');
 
 let model;
 let lastSpoken = "";
 let detectionBuffer = [];
-const BUFFER_SIZE = 5; 
+const BUFFER_SIZE = 5; // Must see the same object 5 times to confirm
 
 // 1. Setup Camera
 async function setupCamera() {
@@ -34,7 +32,7 @@ function speak(text) {
     window.speechSynthesis.speak(utterance);
 }
 
-// 3. Main Detection Loop
+// 3. Main Detection Loop (The "Consensus" Logic)
 async function detect() {
     if (!model || video.paused || video.ended) {
         requestAnimationFrame(detect);
@@ -52,14 +50,17 @@ async function detect() {
     if (predictions.length > 0 && predictions[0].score > 0.3) {
         currentPrediction = predictions[0].class;
         
+        // Draw the visual box
         ctx.strokeStyle = '#00ff00';
         ctx.lineWidth = 4;
         ctx.strokeRect(predictions[0].bbox[0], predictions[0].bbox[1], predictions[0].bbox[2], predictions[0].bbox[3]);
     }
 
+    // Add to buffer for stability
     detectionBuffer.push(currentPrediction);
     if (detectionBuffer.length > BUFFER_SIZE) detectionBuffer.shift();
 
+    // Only speak/update if we are "sure" (all items in buffer are the same)
     const allSame = detectionBuffer.every(val => val === detectionBuffer[0]);
     
     if (allSame && detectionBuffer[0] !== lastSpoken) {
@@ -76,7 +77,7 @@ async function detect() {
     requestAnimationFrame(detect);
 }
 
-// 4. Button Event Listeners
+// 4. Button Logic (Step-by-Step Loading)
 actionBtn.addEventListener('click', async () => {
     actionBtn.style.display = 'none';
     statusText.innerText = 'Starting Camera...';
@@ -95,10 +96,4 @@ actionBtn.addEventListener('click', async () => {
     }
 });
 
-resetBtn.addEventListener('click', () => {
-    window.location.reload();
-});
-
-historyBtn.addEventListener('click', () => {
-    objectsList.style.display = (objectsList.style.display === 'none') ? 'block' : 'none';
-});
+        
