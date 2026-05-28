@@ -11,25 +11,26 @@
 
 <body>
 
+    <h1>Coco AI Vision</h1>
+
+    <!-- CAMERA CONTAINER -->
     <div id="camera-container">
 
         <video id="webcam" autoplay playsinline></video>
-
         <canvas id="output-canvas"></canvas>
 
-        <!-- LOW LIGHT WARNING -->
-        <div id="camera-warning">LOW LIGHT DETECTED</div>
+        <!-- 🔥 LOW LIGHT WARNING OVERLAY -->
+        <div id="camera-warning">Low Light Detected</div>
 
     </div>
 
-    <h1>Coco AI Vision</h1>
-
+    <!-- STATUS UI -->
     <div id="status-dot"></div>
-
     <p id="status-text">Click to start</p>
 
     <button id="action-btn">Start Camera</button>
 
+    <!-- HISTORY -->
     <ul id="objects-list"></ul>
 
     <script src="script.js"></script>
