@@ -12,14 +12,23 @@ let model;
 let lastSpoken = "";
 let history = [];
 
-const FPS = 10;
+const FPS = 12;
 const interval = 1000 / FPS;
 let lastTime = 0;
 
 let speechLock = false;
 
+/* SMOOTHING */
+let smoothX = 0;
+let smoothW = 0;
+const SMOOTHING = 0.75;
+
+/* SPEECH CONTROL */
+let firstSeenTime = 0;
+let lastDetectedObject = "";
+
 /* =========================
-   CAMERA SETUP
+   CAMERA
 ========================= */
 
 async function setupCamera() {
@@ -40,7 +49,7 @@ async function setupCamera() {
 }
 
 /* =========================
-   SPEECH SYSTEM (POLISHED)
+   SPEECH
 ========================= */
 
 function speak(text, priority = false) {
@@ -57,23 +66,20 @@ function speak(text, priority = false) {
     utterance.onend = () => {
         setTimeout(() => {
             speechLock = false;
-        }, 300);
+        }, 250);
     };
 
     window.speechSynthesis.speak(utterance);
 }
 
 /* =========================
-   HISTORY SYSTEM
+   HISTORY
 ========================= */
 
 function updateHistory(item) {
     if (history[0] !== item) {
         history.unshift(item);
-
-        if (history.length > 5) {
-            history.pop();
-        }
+        if (history.length > 5) history.pop();
 
         objectsList.innerHTML = history
             .map(i => `<li style="padding:5px;">${i}</li>`)
@@ -82,7 +88,7 @@ function updateHistory(item) {
 }
 
 /* =========================
-   BRIGHTNESS CHECK
+   BRIGHTNESS
 ========================= */
 
 function getBrightness(video) {
@@ -120,14 +126,10 @@ async function detect(time) {
 
     lastTime = time;
 
-    /* =========================
-       LOW LIGHT (FIXED)
-    ========================= */
-
+    /* LOW LIGHT */
     const brightness = getBrightness(video);
 
     if (brightness < 30) {
-
         warningOverlay.classList.add("show");
 
         if (lastSpoken !== "low light") {
@@ -135,18 +137,13 @@ async function detect(time) {
             lastSpoken = "low light";
             updateHistory("Low light detected");
         }
-
     } else {
-
         warningOverlay.classList.remove("show");
-
-        if (lastSpoken === "low light") {
-            lastSpoken = "";
-        }
+        if (lastSpoken === "low light") lastSpoken = "";
     }
 
     /* =========================
-       OBJECT DETECTION
+       OBJECT DETECTION (FIXED MULTI-OBJECT)
     ========================= */
 
     const predictions = await model.detect(video);
@@ -155,110 +152,87 @@ async function detect(time) {
 
     if (predictions.length > 0) {
 
-        predictions.sort((a, b) => b.score - a.score);
+        /* FILTER + SMART RANKING */
+        let filtered = predictions.filter(p => p.score > 0.5);
 
-        const top = predictions[0];
+        filtered.sort((a, b) => {
+            const scoreA = a.score * (a.bbox[2] * a.bbox[3]);
+            const scoreB = b.score * (b.bbox[2] * b.bbox[3]);
+            return scoreB - scoreA;
+        });
 
-        const object = top.class;
-        const confidence = top.score;
+        const topObjects = filtered.slice(0, 3);
 
+        /* =========================
+           SPEECH (SAFE MULTI OBJECT)
+        ========================= */
+
+        const objectNames = topObjects.map(p => p.class);
+
+        const top = topObjects[0];
         const [x, y, w, h] = top.bbox;
 
-        /* =========================
-           DIRECTION LOGIC (NEW)
-        ========================= */
+        /* SMOOTHING */
+        smoothX = smoothX * SMOOTHING + x * (1 - SMOOTHING);
+        smoothW = smoothW * SMOOTHING + w * (1 - SMOOTHING);
 
-        const centerX = x + w / 2;
+        const centerX = smoothX + smoothW / 2;
         const screenMid = canvas.width / 2;
 
-        let direction = "";
+        let direction = "front";
 
-        if (centerX < screenMid - 80) {
-            direction = "left";
-        } 
-        else if (centerX > screenMid + 80) {
-            direction = "right";
-        } 
-        else {
-            direction = "ahead";
-        }
-
-        if (direction === "ahead") direction = "front";
-
-        /* =========================
-           DISTANCE LOGIC
-        ========================= */
+        if (centerX < screenMid - 80) direction = "left";
+        else if (centerX > screenMid + 80) direction = "right";
 
         let distance = "";
 
-        if (w < 120) distance = "far";
-        else if (w < 250) distance = "near";
+        if (smoothW < 120) distance = "far";
+        else if (smoothW < 250) distance = "near";
         else distance = "very close";
 
-        /* =========================
-           OBSTACLE WARNING
-        ========================= */
+        const speechText = `${objectNames.join(", ")} ahead`;
 
-        if (w > 320 && !speechLock) {
-            if (lastSpoken !== "obstacle ahead") {
-                speak("obstacle ahead");
-                lastSpoken = "obstacle ahead";
-                updateHistory("obstacle ahead");
-            }
+        if (speechText !== lastDetectedObject) {
+            firstSeenTime = Date.now();
+            lastDetectedObject = speechText;
+        }
+
+        if (
+            !speechLock &&
+            confidenceCheck(topObjects) &&
+            Date.now() - firstSeenTime > 300
+        ) {
+            speak(`${objectNames[0]} ${distance} on your ${direction}`);
+            lastSpoken = speechText;
+            updateHistory(objectNames.join(", "));
         }
 
         /* =========================
-           MAIN SPEECH
+           DRAW
         ========================= */
 
-        else if (confidence > 0.6) {
+        filtered.forEach(p => {
 
-            const speechText = `${object} ${distance} on your ${direction}`;
+            const [x, y, w, h] = p.bbox;
 
-            if (speechText !== lastSpoken && !speechLock) {
-                speak(speechText);
-                lastSpoken = speechText;
-                updateHistory(speechText);
-            }
-        }
+            const cx = x + w / 2;
+            const cy = y + h / 2;
 
-        /* =========================
-           DRAW MARKERS
-        ========================= */
+            ctx.strokeStyle = '#00ff00';
+            ctx.lineWidth = 3;
 
-        predictions.forEach(p => {
+            ctx.beginPath();
+            ctx.arc(cx, cy, 10, 0, Math.PI * 2);
+            ctx.stroke();
 
-            if (p.score > 0.5) {
+            ctx.fillStyle = '#00ff00';
+            ctx.font = '14px Arial';
 
-                const [x, y, w, h] = p.bbox;
-
-                const centerX = x + w / 2;
-                const centerY = y + h / 2;
-
-                const size = 20;
-
-                ctx.strokeStyle = '#00ff00';
-                ctx.lineWidth = 3;
-
-                ctx.beginPath();
-                ctx.moveTo(centerX - size, centerY);
-                ctx.lineTo(centerX + size, centerY);
-                ctx.stroke();
-
-                ctx.beginPath();
-                ctx.moveTo(centerX, centerY - size);
-                ctx.lineTo(centerX, centerY + size);
-                ctx.stroke();
-
-                ctx.fillStyle = '#00ff00';
-                ctx.font = '16px Arial';
-
-                ctx.fillText(
-                    `${p.class} ${(p.score * 100).toFixed(0)}%`,
-                    centerX + 25,
-                    centerY - 10
-                );
-            }
+            ctx.fillText(
+                `${p.class} ${(p.score * 100).toFixed(0)}%`,
+                cx + 15,
+                cy
+            );
         });
 
     } else {
@@ -269,7 +243,15 @@ async function detect(time) {
 }
 
 /* =========================
-   START BUTTON
+   CONFIDENCE CHECK
+========================= */
+
+function confidenceCheck(list) {
+    return list[0] && list[0].score > 0.6;
+}
+
+/* =========================
+   START
 ========================= */
 
 actionBtn.addEventListener('click', async () => {
@@ -293,10 +275,8 @@ actionBtn.addEventListener('click', async () => {
         detect(0);
 
     } catch (err) {
-
         console.error(err);
         statusText.innerText = "Camera Error: " + err.name;
-
-        speak("Camera error. Please allow permissions or use a supported browser.");
+        speak("Camera error.");
     }
 });
