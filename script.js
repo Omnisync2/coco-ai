@@ -6,6 +6,7 @@ const statusDot = document.getElementById('status-dot');
 const statusText = document.getElementById('status-text');
 const actionBtn = document.getElementById('action-btn');
 const objectsList = document.getElementById('objects-list');
+const warningOverlay = document.getElementById("camera-warning");
 
 let model;
 let lastSpoken = "";
@@ -16,6 +17,10 @@ const interval = 1000 / FPS;
 let lastTime = 0;
 
 let speechLock = false;
+
+/* =========================
+   CAMERA SETUP
+========================= */
 
 async function setupCamera() {
     const stream = await navigator.mediaDevices.getUserMedia({
@@ -34,6 +39,10 @@ async function setupCamera() {
     });
 }
 
+/* =========================
+   SPEECH
+========================= */
+
 function speak(text) {
     if (speechLock) return;
 
@@ -42,7 +51,6 @@ function speak(text) {
     window.speechSynthesis.cancel();
 
     const utterance = new SpeechSynthesisUtterance(text);
-
     utterance.rate = 1.1;
 
     utterance.onend = () => {
@@ -51,6 +59,10 @@ function speak(text) {
 
     window.speechSynthesis.speak(utterance);
 }
+
+/* =========================
+   HISTORY
+========================= */
 
 function updateHistory(item) {
     if (history[0] !== item) {
@@ -62,12 +74,38 @@ function updateHistory(item) {
         }
 
         objectsList.innerHTML = history
-            .map(i =>
-                `<li style="padding:5px;color:#00ff00;">${i}</li>`
-            )
+            .map(i => `<li style="padding:5px;">${i}</li>`)
             .join('');
     }
 }
+
+/* =========================
+   BRIGHTNESS CHECK (NEW)
+========================= */
+
+function getBrightness(video) {
+    const tempCanvas = document.createElement("canvas");
+    const ctx = tempCanvas.getContext("2d");
+
+    tempCanvas.width = video.videoWidth;
+    tempCanvas.height = video.videoHeight;
+
+    ctx.drawImage(video, 0, 0);
+
+    const frame = ctx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
+
+    let total = 0;
+
+    for (let i = 0; i < frame.data.length; i += 4) {
+        total += (frame.data[i] + frame.data[i + 1] + frame.data[i + 2]) / 3;
+    }
+
+    return total / (frame.data.length / 4);
+}
+
+/* =========================
+   AI DETECTION LOOP
+========================= */
 
 async function detect(time) {
 
@@ -80,6 +118,18 @@ async function detect(time) {
     }
 
     lastTime = time;
+
+    /* =========================
+       LOW LIGHT WARNING (NEW)
+    ========================= */
+
+    const brightness = getBrightness(video);
+
+    if (brightness < 45) {
+        warningOverlay.classList.add("show");
+    } else {
+        warningOverlay.classList.remove("show");
+    }
 
     const predictions = await model.detect(video);
 
@@ -96,20 +146,12 @@ async function detect(time) {
 
         const [x, y, w, h] = top.bbox;
 
-        // DISTANCE ESTIMATION
         let distance = "";
 
-        if (w < 120) {
-            distance = "far";
-        }
-        else if (w < 250) {
-            distance = "near";
-        }
-        else {
-            distance = "very close";
-        }
+        if (w < 120) distance = "far";
+        else if (w < 250) distance = "near";
+        else distance = "very close";
 
-        // IF OBJECT IS TOO CLOSE
         if (w > 320 && !speechLock) {
 
             if (lastSpoken !== "obstacle ahead") {
@@ -122,7 +164,6 @@ async function detect(time) {
             }
         }
 
-        // NORMAL OBJECT SPEECH
         else if (confidence > 0.6) {
 
             const speechText = `${object} ${distance}`;
@@ -137,7 +178,6 @@ async function detect(time) {
             }
         }
 
-        // DRAW BOXES
         predictions.forEach(p => {
 
             if (p.score > 0.4) {
@@ -161,12 +201,15 @@ async function detect(time) {
         });
 
     } else {
-
         lastSpoken = "";
     }
 
     requestAnimationFrame(detect);
 }
+
+/* =========================
+   START BUTTON
+========================= */
 
 actionBtn.addEventListener('click', async () => {
 
