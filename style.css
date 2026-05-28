@@ -1,74 +1,41 @@
-:root {
-    --bg-color: #000000;
-    --text-color: #ffffff;
-    --accent-color: #00ff00;
-    --panel-bg: rgba(0, 0, 0, 0.7);
-}
-
 body {
-    margin: 0;
-    padding: 0;
-    background-color: var(--bg-color);
-    color: var(--text-color);
+    background-color: #121212;
+    color: white;
     font-family: sans-serif;
-    overflow: hidden;
-}
-
-#webcam, #output-canvas {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-}
-
-#status-bar {
-    position: fixed;
-    top: 20px;
-    left: 20px;
-    z-index: 10;
-    background: var(--panel-bg);
-    padding: 10px 20px;
-    border-radius: 25px;
-    backdrop-filter: blur(10px);
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-
-#status-dot {
-    width: 12px;
-    height: 12px;
-    background-color: #ff0000;
-    border-radius: 50%;
-}
-
-#status-dot.ready {
-    background-color: var(--accent-color);
-}
-
-#results-panel {
-    position: fixed;
-    bottom: 120px;
-    width: 90%;
     text-align: center;
-    z-index: 5;
-    pointer-events: none;
+}
+
+/* Make sure the video and canvas are stacked correctly */
+#webcam, #output-canvas {
+    position: relative;
+    width: 100%;
+    max-width: 500px;
+    display: block;
+    margin: 10px auto;
+}
+
+/* Force the canvas to overlay the video */
+#output-canvas {
+    position: absolute;
+    top: 100px; /* Adjust this based on where your header is */
+    left: 0;
+    right: 0;
+    margin: auto;
+}
+
+/* This makes sure the history list is visible and styled */
+#objects-list {
+    margin-top: 20px;
+    list-style: none;
+    font-size: 1.5rem;
+    color: #00ff00; /* Bright green for high contrast */
+    font-weight: bold;
 }
 
 #action-btn {
-    position: fixed;
-    bottom: 40px;
-    left: 50%;
-    transform: translateX(-50%);
-    z-index: 10;
-    padding: 15px 40px;
+    padding: 15px 30px;
     font-size: 1.2rem;
-    font-weight: bold;
-    border-radius: 30px;
-    border: none;
-    background-color: var(--accent-color);
-    color: #000;
+    background: #ffd700;
+    border-radius: 10px;
     cursor: pointer;
 }
