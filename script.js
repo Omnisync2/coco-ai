@@ -40,20 +40,24 @@ async function setupCamera() {
 }
 
 /* =========================
-   SPEECH SYSTEM
+   SPEECH SYSTEM (POLISHED)
 ========================= */
 
-function speak(text) {
-    if (speechLock) return;
+function speak(text, priority = false) {
+    if (speechLock && !priority) return;
 
     speechLock = true;
     window.speechSynthesis.cancel();
 
     const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = 1.1;
+    utterance.rate = 1.05;
+    utterance.pitch = 1;
+    utterance.volume = 1;
 
     utterance.onend = () => {
-        speechLock = false;
+        setTimeout(() => {
+            speechLock = false;
+        }, 300);
     };
 
     window.speechSynthesis.speak(utterance);
@@ -127,7 +131,7 @@ async function detect(time) {
         warningOverlay.classList.add("show");
 
         if (lastSpoken !== "low light") {
-            speak("Low light detected");
+            speak("Low light detected", true);
             lastSpoken = "low light";
             updateHistory("Low light detected");
         }
@@ -160,13 +164,41 @@ async function detect(time) {
 
         const [x, y, w, h] = top.bbox;
 
+        /* =========================
+           DIRECTION LOGIC (NEW)
+        ========================= */
+
+        const centerX = x + w / 2;
+        const screenMid = canvas.width / 2;
+
+        let direction = "";
+
+        if (centerX < screenMid - 80) {
+            direction = "left";
+        } 
+        else if (centerX > screenMid + 80) {
+            direction = "right";
+        } 
+        else {
+            direction = "ahead";
+        }
+
+        if (direction === "ahead") direction = "front";
+
+        /* =========================
+           DISTANCE LOGIC
+        ========================= */
+
         let distance = "";
 
         if (w < 120) distance = "far";
         else if (w < 250) distance = "near";
         else distance = "very close";
 
-        /* obstacle warning */
+        /* =========================
+           OBSTACLE WARNING
+        ========================= */
+
         if (w > 320 && !speechLock) {
             if (lastSpoken !== "obstacle ahead") {
                 speak("obstacle ahead");
@@ -175,10 +207,13 @@ async function detect(time) {
             }
         }
 
-        /* normal speech */
+        /* =========================
+           MAIN SPEECH
+        ========================= */
+
         else if (confidence > 0.6) {
 
-            const speechText = `${object} ${distance}`;
+            const speechText = `${object} ${distance} on your ${direction}`;
 
             if (speechText !== lastSpoken && !speechLock) {
                 speak(speechText);
