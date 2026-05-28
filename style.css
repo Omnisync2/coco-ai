@@ -28,6 +28,8 @@ html, body {
     height: 100vh;
 
     z-index: 0;
+
+    background: black;
 }
 
 /* VIDEO + CANVAS */
@@ -40,7 +42,8 @@ html, body {
     width: 100%;
     height: 100%;
 
-    object-fit: cover;
+    /* IMPORTANT FIX */
+    object-fit: contain;
 }
 
 /* =========================
@@ -49,25 +52,25 @@ html, body {
 
 #camera-warning {
     position: absolute;
-    top: 10px;
+    top: 12px;
     left: 50%;
     transform: translateX(-50%);
 
     padding: 8px 14px;
 
-    background: rgba(0, 0, 0, 0.65);
+    background: rgba(0, 0, 0, 0.7);
     border: 1px solid rgba(255, 0, 0, 0.7);
     border-radius: 8px;
 
     color: red;
     font-size: 13px;
     font-weight: bold;
-    letter-spacing: 1px;
-
-    z-index: 5;
 
     opacity: 0;
+
     transition: opacity 0.2s ease;
+
+    z-index: 5;
 
     pointer-events: none;
 }
@@ -77,43 +80,51 @@ html, body {
 }
 
 /* =========================
-   UI LAYER
+   TITLE
 ========================= */
 
 h1 {
     position: absolute;
     top: 10px;
     width: 100%;
+
     text-align: center;
 
     color: white;
-    z-index: 2;
 
     margin: 0;
+
+    z-index: 2;
 }
+
+/* =========================
+   STATUS
+========================= */
 
 #status-text {
     position: absolute;
     top: 50px;
     width: 100%;
+
     text-align: center;
 
     color: #aaa;
-    z-index: 2;
 
-    margin: 0;
+    z-index: 2;
 }
 
 #status-dot {
     position: absolute;
     top: 80px;
     left: 50%;
+
     transform: translateX(-50%);
 
     width: 12px;
     height: 12px;
 
     border-radius: 50%;
+
     background: red;
 
     z-index: 2;
@@ -124,20 +135,24 @@ h1 {
 }
 
 /* =========================
-   OBJECT LIST
+   HISTORY LIST
 ========================= */
 
 #objects-list {
     position: absolute;
     bottom: 120px;
     left: 50%;
+
     transform: translateX(-50%);
 
     list-style: none;
+
     padding: 0;
     margin: 0;
 
     color: #00ff00;
+
+    font-size: 18px;
     font-weight: bold;
 
     text-align: center;
@@ -153,12 +168,14 @@ h1 {
     position: fixed;
     bottom: 30px;
     left: 50%;
+
     transform: translateX(-50%);
 
     background-color: #ffd700;
-    color: #000;
+    color: black;
 
     padding: 18px 36px;
+
     font-size: 1.1rem;
     font-weight: bold;
 
@@ -168,4 +185,4 @@ h1 {
     cursor: pointer;
 
     z-index: 3;
-}
+   }
