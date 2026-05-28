@@ -1,27 +1,46 @@
-/* This makes the container take up most of the screen width */
+/* Container for both video and canvas */
 .video-container {
     position: relative;
-    width: 90%; 
-    max-width: 500px;
-    margin: 20px auto;
-    border: 3px solid #333; /* Adds a nice border */
-    border-radius: 15px;
+    width: 100%;
+    max-width: 600px;
+    margin: 0 auto;
     overflow: hidden;
+    background: #000;
+    border-radius: 10px;
 }
 
-/* This forces the video to fill that container completely */
+/* Ensure video fills the container */
 #webcam {
     display: block;
     width: 100%;
     height: auto;
-    background: #000;
 }
 
-/* This ensures the canvas draws exactly over the video */
+/* Ensure canvas sits perfectly on top of the video */
 #output-canvas {
     position: absolute;
     top: 0;
     left: 0;
     width: 100%;
     height: 100%;
+}
+
+/* Make sure the Start button is easy to see and click */
+#action-btn {
+    display: block;
+    margin: 20px auto;
+    padding: 15px 30px;
+    font-size: 18px;
+    background-color: #00ff00;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+/* History list styling */
+#objects-list {
+    list-style: none;
+    padding: 0;
+    color: white;
+    font-family: sans-serif;
 }
