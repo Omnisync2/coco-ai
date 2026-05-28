@@ -12,6 +12,10 @@ let model;
 let lastSpoken = "";
 let history = [];
 
+let trackedObject = "";
+let lastSpokenTime = 0;
+const SPEAK_INTERVAL = 10000;
+
 const FPS = 10;
 const interval = 1000 / FPS;
 let lastTime = 0;
@@ -25,9 +29,7 @@ let speechLock = false;
 async function setupCamera() {
 
     const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-            facingMode: 'environment'
-        },
+        video: { facingMode: 'environment' },
         audio: false
     });
 
@@ -58,7 +60,6 @@ function speak(text) {
     window.speechSynthesis.cancel();
 
     const utterance = new SpeechSynthesisUtterance(text);
-
     utterance.rate = 1.1;
 
     utterance.onend = () => {
@@ -78,9 +79,7 @@ function updateHistory(item) {
 
         history.unshift(item);
 
-        if (history.length > 5) {
-            history.pop();
-        }
+        if (history.length > 5) history.pop();
 
         objectsList.innerHTML = history
             .map(i => `<li style="padding:5px;">${i}</li>`)
@@ -89,7 +88,7 @@ function updateHistory(item) {
 }
 
 /* =========================
-   BRIGHTNESS CHECK
+   BRIGHTNESS
 ========================= */
 
 function getBrightness(video) {
@@ -102,22 +101,12 @@ function getBrightness(video) {
 
     tempCtx.drawImage(video, 0, 0);
 
-    const frame = tempCtx.getImageData(
-        0,
-        0,
-        tempCanvas.width,
-        tempCanvas.height
-    );
+    const frame = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
 
     let total = 0;
 
     for (let i = 0; i < frame.data.length; i += 4) {
-
-        total += (
-            frame.data[i] +
-            frame.data[i + 1] +
-            frame.data[i + 2]
-        ) / 3;
+        total += (frame.data[i] + frame.data[i + 1] + frame.data[i + 2]) / 3;
     }
 
     return total / (frame.data.length / 4);
@@ -132,15 +121,13 @@ async function detect(time) {
     if (!model) return;
 
     if (time - lastTime < interval) {
-
         requestAnimationFrame(detect);
         return;
     }
 
     lastTime = time;
 
-    /* LOW LIGHT WARNING */
-
+    /* LOW LIGHT */
     const brightness = getBrightness(video);
 
     if (brightness < 80) {
@@ -164,44 +151,72 @@ async function detect(time) {
 
         const [x, y, w, h] = top.bbox;
 
-        /* BETTER DISTANCE */
+        /* =========================
+           DISTANCE
+        ========================= */
 
         const area = w * h;
 
         let distance = "";
 
-        if (area < 50000) {
-            distance = "far";
+        if (area < 50000) distance = "far";
+        else if (area < 150000) distance = "near";
+        else distance = "very close";
+
+        /* =========================
+           DIRECTION (NEW)
+        ========================= */
+
+        const centerX = x + w / 2;
+        const mid = canvas.width / 2;
+
+        let direction = "";
+
+        if (centerX < mid - 80) {
+            direction = "on your left";
         }
-        else if (area < 150000) {
-            distance = "near";
+        else if (centerX > mid + 80) {
+            direction = "on your right";
         }
         else {
-            distance = "very close";
+            direction = "in front";
         }
 
-        /* SPEECH */
+        /* =========================
+           OBSTACLE WARNING
+        ========================= */
 
-        if (area > 200000 && !speechLock) {
+        const isClose = area > 120000 && confidence > 0.5;
+
+        if (isClose && !speechLock) {
 
             if (lastSpoken !== "obstacle ahead") {
 
                 speak("obstacle ahead");
 
                 lastSpoken = "obstacle ahead";
-
                 updateHistory("obstacle ahead");
             }
         }
 
-        else if (confidence > 0.6) {
+        /* =========================
+           10s SPEECH SYSTEM
+        ========================= */
 
-            const speechText = `${object} ${distance}`;
+        const now = Date.now();
+        const speechText = `${object} ${distance} ${direction}`;
 
-            if (speechText !== lastSpoken && !speechLock) {
+        const isSame = trackedObject === speechText;
+        const canSpeakAgain = (now - lastSpokenTime) > SPEAK_INTERVAL;
+
+        if (!isSame || canSpeakAgain) {
+
+            if (!speechLock && confidence > 0.6) {
 
                 speak(speechText);
 
+                trackedObject = speechText;
+                lastSpokenTime = now;
                 lastSpoken = speechText;
 
                 updateHistory(speechText);
@@ -209,7 +224,7 @@ async function detect(time) {
         }
 
         /* =========================
-           HUD CORNER BOXES
+           HUD BOXES
         ========================= */
 
         predictions.forEach(p => {
@@ -223,35 +238,30 @@ async function detect(time) {
                 ctx.strokeStyle = '#00ff00';
                 ctx.lineWidth = 4;
 
-                // TOP LEFT
+                // corners
                 ctx.beginPath();
                 ctx.moveTo(x, y + corner);
                 ctx.lineTo(x, y);
                 ctx.lineTo(x + corner, y);
                 ctx.stroke();
 
-                // TOP RIGHT
                 ctx.beginPath();
                 ctx.moveTo(x + w - corner, y);
                 ctx.lineTo(x + w, y);
                 ctx.lineTo(x + w, y + corner);
                 ctx.stroke();
 
-                // BOTTOM LEFT
                 ctx.beginPath();
                 ctx.moveTo(x, y + h - corner);
                 ctx.lineTo(x, y + h);
                 ctx.lineTo(x + corner, y + h);
                 ctx.stroke();
 
-                // BOTTOM RIGHT
                 ctx.beginPath();
                 ctx.moveTo(x + w - corner, y + h);
                 ctx.lineTo(x + w, y + h);
                 ctx.lineTo(x + w, y + h - corner);
                 ctx.stroke();
-
-                /* LABEL */
 
                 ctx.fillStyle = '#00ff00';
                 ctx.font = '16px Arial';
@@ -265,7 +275,6 @@ async function detect(time) {
         });
 
     } else {
-
         lastSpoken = "";
     }
 
@@ -273,13 +282,12 @@ async function detect(time) {
 }
 
 /* =========================
-   START BUTTON
+   START
 ========================= */
 
 actionBtn.addEventListener('click', async () => {
 
     actionBtn.style.display = 'none';
-
     statusText.innerText = 'Initializing...';
 
     try {
@@ -291,7 +299,6 @@ actionBtn.addEventListener('click', async () => {
         });
 
         statusDot.classList.add('ready');
-
         statusText.innerText = 'Ready';
 
         speak("System ready. Scanning.");
@@ -301,9 +308,7 @@ actionBtn.addEventListener('click', async () => {
     } catch (err) {
 
         statusText.innerText = 'Error';
-
-        speak("Camera error. Please check permissions.");
-
+        speak("Camera error.");
         console.error(err);
     }
 });
