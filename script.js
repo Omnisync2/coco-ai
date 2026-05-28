@@ -13,7 +13,7 @@ let history = [];
 async function setupCamera() {
     const stream = await navigator.mediaDevices.getUserMedia({ 
         video: { facingMode: 'environment' },
-        audio: false 
+        audio: false // Explicitly disable audio for camera stream to avoid conflicts
     });
     video.srcObject = stream;
     return new Promise((resolve) => { video.onloadedmetadata = resolve; });
@@ -30,10 +30,7 @@ function updateHistory(item) {
     if (history[0] !== item) {
         history.unshift(item);
         if (history.length > 5) history.pop();
-        
-        // This line updates the HTML list
-        objectsList.innerHTML = history.map(i => `<li>${i}</li>`).join('');
-        console.log("History updated:", history); // Check the browser console (F12) to see if this runs
+        objectsList.innerHTML = history.map(i => `<li style="padding: 5px; color: #00ff00;">${i}</li>`).join('');
     }
 }
 
@@ -70,6 +67,7 @@ async function detect() {
 actionBtn.addEventListener('click', async () => {
     actionBtn.style.display = 'none';
     statusText.innerText = 'Initializing...';
+    speak("Starting system. Please wait.");
     
     try {
         await setupCamera();
@@ -80,5 +78,6 @@ actionBtn.addEventListener('click', async () => {
         detect();
     } catch (err) {
         statusText.innerText = 'Error';
+        speak("Could not access camera. Please check permissions.");
     }
 });
