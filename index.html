@@ -9,20 +9,12 @@
 <body>
 
     <h1>Coco AI Vision</h1>
-
-    <div class="video-container">
-        <video id="webcam" autoplay playsinline muted></video>
-        <canvas id="output-canvas"></canvas>
-    </div>
-
+    <video id="webcam" autoplay playsinline></video>
+    <canvas id="output-canvas"></canvas>
+    
+    <div id="status-dot"></div>
     <p id="status-text">Click to start</p>
-
-    <div class="button-row">
-        <button id="reset-btn" class="secondary-btn">RESET</button>
-        <button id="action-btn">START</button>
-        <button id="history-btn" class="secondary-btn">HISTORY</button>
-    </div>
-
+    <button id="action-btn">Start Camera</button>
     <ul id="objects-list"></ul>
 
     <script src="script.js"></script>
