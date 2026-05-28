@@ -23,6 +23,10 @@ let smoothX = 0;
 let smoothW = 0;
 const SMOOTHING = 0.75;
 
+/* TRACKING */
+let trackedObject = null;
+const SWITCH_THRESHOLD = 0.25;
+
 /* SPEECH CONTROL */
 let firstSeenTime = 0;
 let lastDetectedObject = "";
@@ -112,41 +116,41 @@ function getBrightness(video) {
 }
 
 /* =========================
-   CORNER BOX DRAW FUNCTION (NEW)
+   CORNER BOX
 ========================= */
 
 function drawCornerBox(x, y, w, h, color = '#00ff00') {
 
-    const corner = 20;
+    const c = 18;
     ctx.strokeStyle = color;
     ctx.lineWidth = 3;
 
     // top-left
     ctx.beginPath();
-    ctx.moveTo(x, y + corner);
+    ctx.moveTo(x, y + c);
     ctx.lineTo(x, y);
-    ctx.lineTo(x + corner, y);
+    ctx.lineTo(x + c, y);
     ctx.stroke();
 
     // top-right
     ctx.beginPath();
-    ctx.moveTo(x + w - corner, y);
+    ctx.moveTo(x + w - c, y);
     ctx.lineTo(x + w, y);
-    ctx.lineTo(x + w, y + corner);
+    ctx.lineTo(x + w, y + c);
     ctx.stroke();
 
     // bottom-left
     ctx.beginPath();
-    ctx.moveTo(x, y + h - corner);
+    ctx.moveTo(x, y + h - c);
     ctx.lineTo(x, y + h);
-    ctx.lineTo(x + corner, y + h);
+    ctx.lineTo(x + c, y + h);
     ctx.stroke();
 
     // bottom-right
     ctx.beginPath();
-    ctx.moveTo(x + w - corner, y + h);
+    ctx.moveTo(x + w - c, y + h);
     ctx.lineTo(x + w, y + h);
-    ctx.lineTo(x + w, y + h - corner);
+    ctx.lineTo(x + w, y + h - c);
     ctx.stroke();
 }
 
@@ -181,7 +185,6 @@ async function detect(time) {
         if (lastSpoken === "low light") lastSpoken = "";
     }
 
-    /* OBJECT DETECTION */
     const predictions = await model.detect(video);
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -198,9 +201,53 @@ async function detect(time) {
 
         const topObjects = filtered.slice(0, 3);
 
+        /* =========================
+           STABLE TRACKING SYSTEM
+        ========================= */
+
+        function center(obj) {
+            const [x, y, w, h] = obj.bbox;
+            return { x: x + w / 2, w };
+        }
+
+        let best = null;
+        let bestScore = -Infinity;
+
+        for (let obj of topObjects) {
+
+            const c = center(obj);
+
+            let stabilityBonus = 0;
+
+            if (trackedObject) {
+                const prev = center(trackedObject);
+                const dist = Math.abs(prev.x - c.x);
+
+                if (dist < 120) {
+                    stabilityBonus = 0.2;
+                }
+            }
+
+            const score =
+                obj.score * 0.6 +
+                (c.w / 500) * 0.2 +
+                stabilityBonus;
+
+            if (score > bestScore) {
+                bestScore = score;
+                best = obj;
+            }
+        }
+
+        if (!trackedObject || best !== trackedObject) {
+            if (bestScore > SWITCH_THRESHOLD) {
+                trackedObject = best;
+            }
+        }
+
+        const top = trackedObject || topObjects[0];
         const objectNames = topObjects.map(p => p.class);
 
-        const top = topObjects[0];
         const [x, y, w, h] = top.bbox;
 
         /* SMOOTHING */
@@ -238,12 +285,8 @@ async function detect(time) {
             updateHistory(objectNames.join(", "));
         }
 
-        /* =========================
-           DRAW (UPDATED: CORNER BOXES)
-        ========================= */
-
+        /* DRAW OBJECTS */
         filtered.forEach(p => {
-
             const [x, y, w, h] = p.bbox;
 
             drawCornerBox(x, y, w, h, '#00ff00');
@@ -263,6 +306,7 @@ async function detect(time) {
 
     } else {
         lastSpoken = "";
+        trackedObject = null;
     }
 
     requestAnimationFrame(detect);
