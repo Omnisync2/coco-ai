@@ -51,11 +51,26 @@ async function detect() {
         const topObject = predictions[0].class;
         
         if (predictions[0].score > 0.4) {
-            if (topObject !== lastSpoken) {
-                speak(topObject);
-                lastSpoken = topObject;
+            // DIRECTION AWARENESS LOGIC
+            const [x, y, w, h] = predictions[0].bbox;
+            const centerX = x + w / 2;
+            let direction = "";
+            
+            if (centerX < canvas.width / 3) {
+                direction = "on your left";
+            } else if (centerX > (canvas.width / 3) * 2) {
+                direction = "on your right";
+            } else {
+                direction = "ahead";
             }
-            updateHistory(topObject);
+
+            const message = `${topObject} ${direction}`;
+            
+            if (message !== lastSpoken) {
+                speak(message);
+                lastSpoken = message;
+            }
+            updateHistory(message);
         }
 
         // Draw basic box
@@ -82,4 +97,3 @@ actionBtn.addEventListener('click', async () => {
         statusText.innerText = 'Error: ' + err.message;
     }
 });
-            
