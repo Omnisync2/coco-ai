@@ -1,33 +1,44 @@
 /* =========================
-   GLOBAL RESET
+   BASE SETUP
 ========================= */
 
 html, body {
     margin: 0;
     padding: 0;
-
     width: 100%;
     height: 100%;
 
-    background: black;
-    overflow: hidden;
+    background-color: #121212;
+    color: white;
 
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+
+    overflow: hidden;
 }
 
 /* =========================
-   CAMERA FULL SCREEN
+   LAYOUT
+========================= */
+
+body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+h1 {
+    margin: 10px 0;
+}
+
+/* =========================
+   CAMERA AREA
 ========================= */
 
 #camera-container {
-    position: fixed;
-    top: 0;
-    left: 0;
+    position: relative;
 
     width: 100vw;
     height: 100vh;
-
-    z-index: 0;
 
     background: black;
 }
@@ -42,92 +53,91 @@ html, body {
     width: 100%;
     height: 100%;
 
-    /* IMPORTANT FIX */
-    object-fit: contain;
+    object-fit: cover;
 }
 
 /* =========================
-   LOW LIGHT WARNING
+   🔥 LOW LIGHT WARNING (SMOOTH HUD)
 ========================= */
 
 #camera-warning {
     position: absolute;
-    top: 12px;
+    top: 15px;
     left: 50%;
     transform: translateX(-50%);
 
-    padding: 8px 14px;
+    background: rgba(0, 0, 0, 0.75);
+    color: #ff3b3b;
 
-    background: rgba(0, 0, 0, 0.7);
-    border: 1px solid rgba(255, 0, 0, 0.7);
-    border-radius: 8px;
+    padding: 10px 18px;
+    border-radius: 12px;
 
-    color: red;
-    font-size: 13px;
-    font-weight: bold;
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
 
-    opacity: 0;
-
-    transition: opacity 0.2s ease;
-
-    z-index: 5;
+    z-index: 9999;
 
     pointer-events: none;
+
+    /* smooth fade animation */
+    opacity: 0;
+    visibility: hidden;
+    transform: translate(-50%, -10px);
+
+    transition:
+        opacity 0.35s ease,
+        transform 0.35s ease,
+        visibility 0.35s ease;
 }
 
+/* ACTIVE STATE */
 #camera-warning.show {
     opacity: 1;
+    visibility: visible;
+    transform: translate(-50%, 0);
 }
 
 /* =========================
-   TITLE
+   BUTTON
 ========================= */
 
-h1 {
+#action-btn {
     position: absolute;
-    top: 10px;
-    width: 100%;
+    bottom: 30px;
 
-    text-align: center;
+    background-color: #ffd700;
+    color: #000;
 
-    color: white;
+    padding: 18px 36px;
+    font-size: 1.1rem;
+    font-weight: bold;
 
-    margin: 0;
+    border: none;
+    border-radius: 50px;
 
-    z-index: 2;
+    cursor: pointer;
+
+    z-index: 10;
 }
 
 /* =========================
-   STATUS
+   STATUS UI
 ========================= */
 
 #status-text {
-    position: absolute;
-    top: 50px;
-    width: 100%;
-
-    text-align: center;
-
+    margin-top: 10px;
     color: #aaa;
-
-    z-index: 2;
 }
 
 #status-dot {
-    position: absolute;
-    top: 80px;
-    left: 50%;
-
-    transform: translateX(-50%);
-
     width: 12px;
     height: 12px;
 
     border-radius: 50%;
-
     background: red;
 
-    z-index: 2;
+    margin-top: 10px;
 }
 
 #status-dot.ready {
@@ -139,50 +149,13 @@ h1 {
 ========================= */
 
 #objects-list {
-    position: absolute;
-    bottom: 120px;
-    left: 50%;
-
-    transform: translateX(-50%);
-
     list-style: none;
 
     padding: 0;
-    margin: 0;
+    margin-top: 10px;
 
     color: #00ff00;
-
-    font-size: 18px;
     font-weight: bold;
 
     text-align: center;
-
-    z-index: 2;
 }
-
-/* =========================
-   BUTTON
-========================= */
-
-#action-btn {
-    position: fixed;
-    bottom: 30px;
-    left: 50%;
-
-    transform: translateX(-50%);
-
-    background-color: #ffd700;
-    color: black;
-
-    padding: 18px 36px;
-
-    font-size: 1.1rem;
-    font-weight: bold;
-
-    border: none;
-    border-radius: 50px;
-
-    cursor: pointer;
-
-    z-index: 3;
-   }
