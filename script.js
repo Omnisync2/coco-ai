@@ -1,7 +1,6 @@
 const video = document.getElementById('webcam');
 const canvas = document.getElementById('output-canvas');
 const ctx = canvas.getContext('2d');
-const statusDot = document.getElementById('status-dot');
 const statusText = document.getElementById('status-text');
 const actionBtn = document.getElementById('action-btn');
 const objectsList = document.getElementById('objects-list');
@@ -13,7 +12,7 @@ let history = [];
 async function setupCamera() {
     const stream = await navigator.mediaDevices.getUserMedia({ 
         video: { facingMode: 'environment' },
-        audio: false // Explicitly disable audio for camera stream to avoid conflicts
+        audio: false 
     });
     video.srcObject = stream;
     return new Promise((resolve) => { video.onloadedmetadata = resolve; });
@@ -26,11 +25,16 @@ function speak(text) {
     window.speechSynthesis.speak(utterance);
 }
 
+// Fixed: This function now forces an update to the HTML list
 function updateHistory(item) {
     if (history[0] !== item) {
         history.unshift(item);
         if (history.length > 5) history.pop();
-        objectsList.innerHTML = history.map(i => `<li style="padding: 5px; color: #00ff00;">${i}</li>`).join('');
+        
+        // This explicitly updates the DOM
+        let html = '';
+        history.forEach(i => { html += `<li>${i}</li>`; });
+        objectsList.innerHTML = html;
     }
 }
 
@@ -50,7 +54,7 @@ async function detect() {
             }
             updateHistory(topObject);
         } else if (lastSpoken !== "unidentified") {
-            speak("unidentified object");
+            speak("unidentified");
             lastSpoken = "unidentified";
         }
         
@@ -67,18 +71,14 @@ async function detect() {
 actionBtn.addEventListener('click', async () => {
     actionBtn.style.display = 'none';
     statusText.innerText = 'Initializing...';
-    speak("Starting system. Please wait.");
     
     try {
         await setupCamera();
         model = await cocoSsd.load({base: 'mobilenet_v2'});
-        statusDot.classList.add('ready');
-        statusText.innerText = 'Ready';
+        statusText.innerText = 'System Ready';
         speak("System ready. Scanning.");
         detect();
     } catch (err) {
-        statusText.innerText = 'Error';
-        speak("Could not access camera. Please check permissions.");
+        statusText.innerText = 'Error: Check Camera';
     }
 });
-        
