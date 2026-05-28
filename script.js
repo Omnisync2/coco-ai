@@ -9,12 +9,14 @@ let model;
 let lastSpoken = "";
 let history = [];
 
+// 1. Force the camera to be ready before doing anything
 async function setupCamera() {
     const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { facingMode: 'environment' },
+        video: { facingMode: 'environment' }, 
         audio: false 
     });
     video.srcObject = stream;
+    
     return new Promise((resolve) => {
         video.onloadedmetadata = () => {
             video.play();
@@ -29,18 +31,10 @@ function speak(text) {
     window.speechSynthesis.speak(utterance);
 }
 
-function updateHistory(item) {
-    if (history[0] !== item) {
-        history.unshift(item);
-        if (history.length > 5) history.pop();
-        objectsList.innerHTML = history.map(i => `<li>${i}</li>`).join('');
-    }
-}
-
+// 2. The brain: Only runs if the video is actually playing
 async function detect() {
-    if (!model) return;
-    
-    // Set canvas dimensions
+    if (!model || video.paused || video.ended) return;
+
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
 
@@ -48,52 +42,48 @@ async function detect() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     if (predictions.length > 0) {
-        const topObject = predictions[0].class;
-        
-        if (predictions[0].score > 0.4) {
-            // DIRECTION AWARENESS LOGIC
-            const [x, y, w, h] = predictions[0].bbox;
-            const centerX = x + w / 2;
-            let direction = "";
+        const p = predictions[0];
+        if (p.score > 0.4) {
+            const centerX = p.bbox[0] + p.bbox[2] / 2;
+            let dir = (centerX < canvas.width / 3) ? "on your left" : 
+                      (centerX > (canvas.width / 3) * 2) ? "on your right" : "ahead";
             
-            if (centerX < canvas.width / 3) {
-                direction = "on your left";
-            } else if (centerX > (canvas.width / 3) * 2) {
-                direction = "on your right";
-            } else {
-                direction = "ahead";
-            }
-
-            const message = `${topObject} ${direction}`;
-            
+            let message = `${p.class} ${dir}`;
             if (message !== lastSpoken) {
                 speak(message);
                 lastSpoken = message;
             }
-            updateHistory(message);
+            
+            // UI update
+            if (history[0] !== message) {
+                history.unshift(message);
+                if (history.length > 3) history.pop();
+                objectsList.innerHTML = history.map(i => `<li>${i}</li>`).join('');
+            }
         }
-
-        // Draw basic box
-        predictions.forEach(p => {
-            const [x, y, w, h] = p.bbox;
-            ctx.strokeStyle = '#00ff00';
-            ctx.lineWidth = 4;
-            ctx.strokeRect(x, y, w, h);
-        });
+        ctx.strokeStyle = '#00ff00';
+        ctx.lineWidth = 4;
+        ctx.strokeRect(p.bbox[0], p.bbox[1], p.bbox[2], p.bbox[3]);
     }
-    
     requestAnimationFrame(detect);
 }
 
+// 3. Sequential Loading: One step at a time
 actionBtn.addEventListener('click', async () => {
-    actionBtn.style.display = 'none';
-    statusText.innerText = 'Initializing...';
     try {
+        actionBtn.innerText = "Loading Camera...";
         await setupCamera();
+        
+        actionBtn.innerText = "Loading AI...";
         model = await cocoSsd.load();
-        statusText.innerText = 'Ready';
+        
+        actionBtn.style.display = 'none';
+        statusText.innerText = 'System Active';
+        
         detect();
-    } catch (err) {
-        statusText.innerText = 'Error: ' + err.message;
+    } catch (e) {
+        statusText.innerText = "Error: " + e.message;
+        console.error(e);
     }
 });
+                
