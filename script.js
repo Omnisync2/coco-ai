@@ -112,6 +112,45 @@ function getBrightness(video) {
 }
 
 /* =========================
+   CORNER BOX DRAW FUNCTION (NEW)
+========================= */
+
+function drawCornerBox(x, y, w, h, color = '#00ff00') {
+
+    const corner = 20;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 3;
+
+    // top-left
+    ctx.beginPath();
+    ctx.moveTo(x, y + corner);
+    ctx.lineTo(x, y);
+    ctx.lineTo(x + corner, y);
+    ctx.stroke();
+
+    // top-right
+    ctx.beginPath();
+    ctx.moveTo(x + w - corner, y);
+    ctx.lineTo(x + w, y);
+    ctx.lineTo(x + w, y + corner);
+    ctx.stroke();
+
+    // bottom-left
+    ctx.beginPath();
+    ctx.moveTo(x, y + h - corner);
+    ctx.lineTo(x, y + h);
+    ctx.lineTo(x + corner, y + h);
+    ctx.stroke();
+
+    // bottom-right
+    ctx.beginPath();
+    ctx.moveTo(x + w - corner, y + h);
+    ctx.lineTo(x + w, y + h);
+    ctx.lineTo(x + w, y + h - corner);
+    ctx.stroke();
+}
+
+/* =========================
    DETECTION LOOP
 ========================= */
 
@@ -142,17 +181,13 @@ async function detect(time) {
         if (lastSpoken === "low light") lastSpoken = "";
     }
 
-    /* =========================
-       OBJECT DETECTION (FIXED MULTI-OBJECT)
-    ========================= */
-
+    /* OBJECT DETECTION */
     const predictions = await model.detect(video);
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     if (predictions.length > 0) {
 
-        /* FILTER + SMART RANKING */
         let filtered = predictions.filter(p => p.score > 0.5);
 
         filtered.sort((a, b) => {
@@ -162,10 +197,6 @@ async function detect(time) {
         });
 
         const topObjects = filtered.slice(0, 3);
-
-        /* =========================
-           SPEECH (SAFE MULTI OBJECT)
-        ========================= */
 
         const objectNames = topObjects.map(p => p.class);
 
@@ -208,22 +239,17 @@ async function detect(time) {
         }
 
         /* =========================
-           DRAW
+           DRAW (UPDATED: CORNER BOXES)
         ========================= */
 
         filtered.forEach(p => {
 
             const [x, y, w, h] = p.bbox;
 
+            drawCornerBox(x, y, w, h, '#00ff00');
+
             const cx = x + w / 2;
             const cy = y + h / 2;
-
-            ctx.strokeStyle = '#00ff00';
-            ctx.lineWidth = 3;
-
-            ctx.beginPath();
-            ctx.arc(cx, cy, 10, 0, Math.PI * 2);
-            ctx.stroke();
 
             ctx.fillStyle = '#00ff00';
             ctx.font = '14px Arial';
