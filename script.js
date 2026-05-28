@@ -15,13 +15,17 @@ async function setupCamera() {
         audio: false 
     });
     video.srcObject = stream;
-    return new Promise((resolve) => { video.onloadedmetadata = resolve; });
+    return new Promise((resolve) => {
+        video.onloadedmetadata = () => {
+            video.play();
+            resolve();
+        };
+    });
 }
 
 function speak(text) {
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = 1.1;
     window.speechSynthesis.speak(utterance);
 }
 
@@ -29,56 +33,38 @@ function updateHistory(item) {
     if (history[0] !== item) {
         history.unshift(item);
         if (history.length > 5) history.pop();
-        
-        let html = '';
-        history.forEach(i => { html += `<li>${i}</li>`; });
-        objectsList.innerHTML = html;
+        objectsList.innerHTML = history.map(i => `<li>${i}</li>`).join('');
     }
 }
 
 async function detect() {
     if (!model) return;
     
-    // Ensure canvas matches video size
+    // Set canvas dimensions
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
 
-    const predictions = await model.detect(video, 20, 0.4);
+    const predictions = await model.detect(video);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     if (predictions.length > 0) {
         const topObject = predictions[0].class;
-        const confidence = predictions[0].score;
-
-        if (confidence > 0.4) {
+        
+        if (predictions[0].score > 0.4) {
             if (topObject !== lastSpoken) {
                 speak(topObject);
                 lastSpoken = topObject;
             }
             updateHistory(topObject);
-        } else if (lastSpoken !== "unidentified") {
-            speak("unidentified");
-            lastSpoken = "unidentified";
         }
 
-        // Draw Corner Brackets
+        // Draw basic box
         predictions.forEach(p => {
             const [x, y, w, h] = p.bbox;
-            const len = 20; // Length of corner bracket
             ctx.strokeStyle = '#00ff00';
             ctx.lineWidth = 4;
-
-            // Top-left
-            ctx.beginPath(); ctx.moveTo(x, y + len); ctx.lineTo(x, y); ctx.lineTo(x + len, y); ctx.stroke();
-            // Top-right
-            ctx.beginPath(); ctx.moveTo(x + w - len, y); ctx.lineTo(x + w, y); ctx.lineTo(x + w, y + len); ctx.stroke();
-            // Bottom-left
-            ctx.beginPath(); ctx.moveTo(x, y + h - len); ctx.lineTo(x, y + h); ctx.lineTo(x + len, y + h); ctx.stroke();
-            // Bottom-right
-            ctx.beginPath(); ctx.moveTo(x + w - len, y + h); ctx.lineTo(x + w, y + h); ctx.lineTo(x + w, y + h - len); ctx.stroke();
+            ctx.strokeRect(x, y, w, h);
         });
-    } else {
-        lastSpoken = "";
     }
     
     requestAnimationFrame(detect);
@@ -87,16 +73,12 @@ async function detect() {
 actionBtn.addEventListener('click', async () => {
     actionBtn.style.display = 'none';
     statusText.innerText = 'Initializing...';
-    
     try {
         await setupCamera();
-        model = await cocoSsd.load({base: 'mobilenet_v2'});
-        statusText.innerText = 'System Ready';
-        speak("System ready. Scanning.");
-        video.play();
+        model = await cocoSsd.load();
+        statusText.innerText = 'Ready';
         detect();
     } catch (err) {
         statusText.innerText = 'Error: ' + err.message;
     }
 });
-                            
