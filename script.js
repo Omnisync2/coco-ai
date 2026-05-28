@@ -7,10 +7,7 @@ const objectsList = document.getElementById('objects-list');
 
 let model;
 let lastSpoken = "";
-let detectionBuffer = [];
-const BUFFER_SIZE = 5; // Must see the same object 5 times to confirm
 
-// 1. Setup Camera
 async function setupCamera() {
     const stream = await navigator.mediaDevices.getUserMedia({ 
         video: { facingMode: 'environment' }, 
@@ -25,15 +22,14 @@ async function setupCamera() {
     });
 }
 
-// 2. Text-to-Speech
 function speak(text) {
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
     window.speechSynthesis.speak(utterance);
 }
 
-// 3. Main Detection Loop (The "Consensus" Logic)
 async function detect() {
+    // Safety check: only run if model exists and video is playing
     if (!model || video.paused || video.ended) {
         requestAnimationFrame(detect);
         return;
@@ -45,55 +41,49 @@ async function detect() {
     const predictions = await model.detect(video);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    let currentPrediction = "unidentified";
-    
-    if (predictions.length > 0 && predictions[0].score > 0.3) {
-        currentPrediction = predictions[0].class;
+    if (predictions.length > 0) {
+        const top = predictions[0];
         
-        // Draw the visual box
+        if (top.score > 0.4) {
+            if (top.class !== lastSpoken) {
+                speak(top.class);
+                lastSpoken = top.class;
+                
+                const li = document.createElement('li');
+                li.textContent = top.class;
+                objectsList.prepend(li);
+            }
+        }
+        
         ctx.strokeStyle = '#00ff00';
         ctx.lineWidth = 4;
-        ctx.strokeRect(predictions[0].bbox[0], predictions[0].bbox[1], predictions[0].bbox[2], predictions[0].bbox[3]);
-    }
-
-    // Add to buffer for stability
-    detectionBuffer.push(currentPrediction);
-    if (detectionBuffer.length > BUFFER_SIZE) detectionBuffer.shift();
-
-    // Only speak/update if we are "sure" (all items in buffer are the same)
-    const allSame = detectionBuffer.every(val => val === detectionBuffer[0]);
-    
-    if (allSame && detectionBuffer[0] !== lastSpoken) {
-        lastSpoken = detectionBuffer[0];
-        speak(lastSpoken);
+        ctx.strokeRect(top.bbox[0], top.bbox[1], top.bbox[2], top.bbox[3]);
         
+    } else {
         if (lastSpoken !== "unidentified") {
-            const li = document.createElement('li');
-            li.textContent = lastSpoken;
-            objectsList.prepend(li);
+            speak("unidentified");
+            lastSpoken = "unidentified";
         }
     }
-
     requestAnimationFrame(detect);
 }
 
-// 4. Button Logic (Step-by-Step Loading)
 actionBtn.addEventListener('click', async () => {
     actionBtn.style.display = 'none';
     statusText.innerText = 'Starting Camera...';
     
     try {
+        // Step 1: Initialize Camera
         await setupCamera();
         statusText.innerText = 'Camera Ready. Loading AI...';
         
+        // Step 2: Load Model
         model = await cocoSsd.load();
         
         statusText.innerText = 'System Ready';
         detect();
     } catch (err) {
         statusText.innerText = 'Error: ' + err.message;
-        actionBtn.style.display = 'block'; 
+        actionBtn.style.display = 'block'; // Show button again so you can retry
     }
 });
-
-        
