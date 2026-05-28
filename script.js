@@ -9,7 +9,6 @@ const objectsList = document.getElementById('objects-list');
 const warningOverlay = document.getElementById("camera-warning");
 
 let model;
-let lastSpoken = "";
 let history = [];
 
 const FPS = 12;
@@ -18,14 +17,27 @@ let lastTime = 0;
 
 let speechLock = false;
 
+/* LOW LIGHT CONTROL */
+let lowLightCooldown = 0;
+let lowLightSpeaking = false;
+
+/* SMOOTHING */
 let smoothX = 0;
 let smoothW = 0;
 const SMOOTHING = 0.75;
 
-let trackedObject = null;
-const SWITCH_THRESHOLD = 0.25;
-
-let lowLightCooldown = 0;
+/* CHINESE MAP */
+const zhMap = {
+    person: "人",
+    chair: "椅子",
+    bottle: "瓶子",
+    cup: "杯子",
+    laptop: "笔记本电脑",
+    cell phone: "手机",
+    book: "书",
+    sofa: "沙发",
+    tv: "电视"
+};
 
 /* CAMERA */
 async function setupCamera() {
@@ -45,19 +57,21 @@ async function setupCamera() {
     });
 }
 
-/* SPEECH (CHINESE READY) */
-function speak(text, priority = false) {
-    if (speechLock && !priority) return;
+/* SPEECH */
+function speak(text) {
+    if (speechLock) return;
 
     speechLock = true;
     window.speechSynthesis.cancel();
 
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = 1.05;
+    const msg = new SpeechSynthesisUtterance(text);
+    msg.rate = 1.05;
 
-    utterance.onend = () => setTimeout(() => speechLock = false, 250);
+    msg.onend = () => {
+        setTimeout(() => speechLock = false, 200);
+    };
 
-    window.speechSynthesis.speak(utterance);
+    speechSynthesis.speak(msg);
 }
 
 /* HISTORY */
@@ -65,7 +79,6 @@ function updateHistory(item) {
     if (history[0] !== item) {
         history.unshift(item);
         if (history.length > 5) history.pop();
-
         objectsList.innerHTML = history.map(i => `<li>${i}</li>`).join('');
     }
 }
@@ -91,10 +104,9 @@ function getBrightness(video) {
 }
 
 /* CORNER BOX */
-function drawCornerBox(x, y, w, h, color = "#00ff00") {
+function drawCornerBox(x, y, w, h) {
     const c = 18;
-
-    ctx.strokeStyle = color;
+    ctx.strokeStyle = "#00ff00";
     ctx.lineWidth = 3;
 
     ctx.beginPath();
@@ -124,14 +136,32 @@ async function detect(time) {
     const brightness = getBrightness(video);
     const now = Date.now();
 
-    /* LOW LIGHT */
+    /* LOW LIGHT FIX */
     if (brightness < 30) {
-        if (now > lowLightCooldown) {
-            speak("光线不足", true);
-            lastSpoken = "low";
+
+        warningOverlay.classList.add("show");
+
+        if (!lowLightSpeaking && now > lowLightCooldown) {
+
+            lowLightSpeaking = true;
+            speechSynthesis.cancel();
+
+            const msg = new SpeechSynthesisUtterance("光线不足");
+
+            msg.onend = () => {
+                lowLightSpeaking = false;
+            };
+
+            speechSynthesis.speak(msg);
+
             updateHistory("光线不足");
+
             lowLightCooldown = now + 3000;
         }
+
+    } else {
+        warningOverlay.classList.remove("show");
+        lowLightSpeaking = false;
     }
 
     const predictions = await model.detect(video);
@@ -149,75 +179,47 @@ async function detect(time) {
 
         const topObjects = filtered.slice(0,3);
 
-        function center(o){
-            const [x,y,w]=o.bbox;
-            return {x:x+w/2,w};
+        const names = topObjects.map(p => zhMap[p.class] || p.class);
+
+        const top = topObjects[0];
+        const [x,y,w,h] = top.bbox;
+
+        smoothX = smoothX*SMOOTHING + x*(1-SMOOTHING);
+        smoothW = smoothW*SMOOTHING + w*(1-SMOOTHING);
+
+        const cx = smoothX + smoothW/2;
+        const mid = canvas.width/2;
+
+        let dir = "前方";
+        if (cx < mid - 80) dir = "左侧";
+        else if (cx > mid + 80) dir = "右侧";
+
+        let dist = "远";
+        if (smoothW > 120) dist = "近";
+        if (smoothW > 250) dist = "非常近";
+
+        drawCornerBox(x,y,w,h);
+
+        if (!speechLock) {
+            speak(`${names[0]}在${dir}，距离${dist}`);
+            updateHistory(names.join(", "));
         }
-
-        let best=null, bestScore=-1;
-
-        for (let obj of topObjects){
-            const c=center(obj);
-            let bonus=0;
-
-            if(trackedObject){
-                const prev=center(trackedObject);
-                if(Math.abs(prev.x-c.x)<120) bonus=0.2;
-            }
-
-            const score=obj.score*0.6+(c.w/500)*0.2+bonus;
-
-            if(score>bestScore){
-                bestScore=score;
-                best=obj;
-            }
-        }
-
-        if(!trackedObject || best!==trackedObject){
-            if(bestScore>SWITCH_THRESHOLD) trackedObject=best;
-        }
-
-        const top=trackedObject||topObjects[0];
-
-        const names=topObjects.map(p=>p.class);
-
-        const [x,y,w]=top.bbox;
-
-        smoothX=smoothX*SMOOTHING+x*(1-SMOOTHING);
-        smoothW=smoothW*SMOOTHING+w*(1-SMOOTHING);
-
-        const cx=smoothX+smoothW/2;
-        const mid=canvas.width/2;
-
-        let dir="前方";
-        if(cx<mid-80) dir="左侧";
-        else if(cx>mid+80) dir="右侧";
-
-        let dist="远";
-        if(smoothW>120) dist="近";
-        if(smoothW>250) dist="非常近";
-
-        drawCornerBox(x,y,w,top.bbox[3]);
-
-        if(!speechLock){
-            speak(`${names[0]} ${dist} 在${dir}`);
-        }
-
     }
 
     requestAnimationFrame(detect);
 }
 
 /* START */
-actionBtn.onclick=async()=>{
-    actionBtn.style.display="none";
-    statusText.innerText="初始化中";
+actionBtn.onclick = async () => {
+
+    actionBtn.style.display = "none";
+    statusText.innerText = "初始化中";
 
     await setupCamera();
-    model=await cocoSsd.load();
+    model = await cocoSsd.load();
 
     statusDot.classList.add("ready");
-    statusText.innerText="就绪";
+    statusText.innerText = "就绪";
 
     speak("系统已启动");
 
