@@ -1,83 +1,98 @@
 const video = document.getElementById('webcam');
 const canvas = document.getElementById('output-canvas');
 const ctx = canvas.getContext('2d');
-const statusDot = document.getElementById('status-dot');
 const statusText = document.getElementById('status-text');
 const actionBtn = document.getElementById('action-btn');
 const objectsList = document.getElementById('objects-list');
 
 let model;
 let lastSpoken = "";
-let history = [];
+let detectionBuffer = [];
+const BUFFER_SIZE = 5; // Must see the same object 5 times to confirm
 
+// 1. Setup Camera
 async function setupCamera() {
     const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { facingMode: 'environment' },
-        audio: false // Explicitly disable audio for camera stream to avoid conflicts
+        video: { facingMode: 'environment' }, 
+        audio: false 
     });
     video.srcObject = stream;
-    return new Promise((resolve) => { video.onloadedmetadata = resolve; });
+    return new Promise((resolve) => {
+        video.onloadedmetadata = () => {
+            video.play();
+            resolve();
+        };
+    });
 }
 
+// 2. Text-to-Speech
 function speak(text) {
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = 1.1;
     window.speechSynthesis.speak(utterance);
 }
 
-function updateHistory(item) {
-    if (history[0] !== item) {
-        history.unshift(item);
-        if (history.length > 5) history.pop();
-        objectsList.innerHTML = history.map(i => `<li style="padding: 5px; color: #00ff00;">${i}</li>`).join('');
-    }
-}
-
+// 3. Main Detection Loop (The "Consensus" Logic)
 async function detect() {
-    if (!model) return;
-    const predictions = await model.detect(video, 20, 0.2);
+    if (!model || video.paused || video.ended) {
+        requestAnimationFrame(detect);
+        return;
+    }
+
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+
+    const predictions = await model.detect(video);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    if (predictions.length > 0) {
-        const topObject = predictions[0].class;
-        const confidence = predictions[0].score;
-
-        if (confidence > 0.4) {
-            if (topObject !== lastSpoken) {
-                speak(topObject);
-                lastSpoken = topObject;
-            }
-            updateHistory(topObject);
-        } else if (lastSpoken !== "unidentified") {
-            speak("unidentified object");
-            lastSpoken = "unidentified";
-        }
+    let currentPrediction = "unidentified";
+    
+    if (predictions.length > 0 && predictions[0].score > 0.3) {
+        currentPrediction = predictions[0].class;
         
-        predictions.forEach(p => {
-            const [x, y, w, h] = p.bbox;
-            ctx.strokeStyle = '#00ff00';
-            ctx.lineWidth = 4;
-            ctx.strokeRect(x, y, w, h);
-        });
-    } else { lastSpoken = ""; }
+        // Draw the visual box
+        ctx.strokeStyle = '#00ff00';
+        ctx.lineWidth = 4;
+        ctx.strokeRect(predictions[0].bbox[0], predictions[0].bbox[1], predictions[0].bbox[2], predictions[0].bbox[3]);
+    }
+
+    // Add to buffer for stability
+    detectionBuffer.push(currentPrediction);
+    if (detectionBuffer.length > BUFFER_SIZE) detectionBuffer.shift();
+
+    // Only speak/update if we are "sure" (all items in buffer are the same)
+    const allSame = detectionBuffer.every(val => val === detectionBuffer[0]);
+    
+    if (allSame && detectionBuffer[0] !== lastSpoken) {
+        lastSpoken = detectionBuffer[0];
+        speak(lastSpoken);
+        
+        if (lastSpoken !== "unidentified") {
+            const li = document.createElement('li');
+            li.textContent = lastSpoken;
+            objectsList.prepend(li);
+        }
+    }
+
     requestAnimationFrame(detect);
 }
 
+// 4. Button Logic (Step-by-Step Loading)
 actionBtn.addEventListener('click', async () => {
     actionBtn.style.display = 'none';
-    statusText.innerText = 'Initializing...';
-    speak("Starting system. Please wait.");
+    statusText.innerText = 'Starting Camera...';
     
     try {
         await setupCamera();
-        model = await cocoSsd.load({base: 'mobilenet_v2'});
-        statusDot.classList.add('ready');
-        statusText.innerText = 'Ready';
-        speak("System ready. Scanning.");
+        statusText.innerText = 'Camera Ready. Loading AI...';
+        
+        model = await cocoSsd.load();
+        
+        statusText.innerText = 'System Ready';
         detect();
     } catch (err) {
-        statusText.innerText = 'Error';
-        speak("Could not access camera. Please check permissions.");
+        statusText.innerText = 'Error: ' + err.message;
+        actionBtn.style.display = 'block'; 
     }
 });
+            
