@@ -7,75 +7,78 @@ const objectsList = document.getElementById('objects-list');
 
 let model;
 let lastSpoken = "";
+let history = [];
 
 async function setupCamera() {
     const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { facingMode: 'environment' }, 
+        video: { facingMode: 'environment' },
         audio: false 
     });
     video.srcObject = stream;
-    return new Promise((resolve) => {
-        video.onloadedmetadata = () => {
-            video.play();
-            resolve();
-        };
-    });
+    return new Promise((resolve) => { video.onloadedmetadata = resolve; });
 }
 
 function speak(text) {
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
+    utterance.rate = 1.1;
     window.speechSynthesis.speak(utterance);
+}
+
+// Fixed: This function now forces an update to the HTML list
+function updateHistory(item) {
+    if (history[0] !== item) {
+        history.unshift(item);
+        if (history.length > 5) history.pop();
+        
+        // This explicitly updates the DOM
+        let html = '';
+        history.forEach(i => { html += `<li>${i}</li>`; });
+        objectsList.innerHTML = html;
+    }
 }
 
 async function detect() {
     if (!model) return;
-    
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-
-    const predictions = await model.detect(video);
+    const predictions = await model.detect(video, 20, 0.2);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     if (predictions.length > 0) {
-        const top = predictions[0];
-        
-        if (top.score > 0.4) {
-            if (top.class !== lastSpoken) {
-                speak(top.class);
-                lastSpoken = top.class;
-                
-                // Add to list
-                const li = document.createElement('li');
-                li.textContent = top.class;
-                objectsList.prepend(li);
+        const topObject = predictions[0].class;
+        const confidence = predictions[0].score;
+
+        if (confidence > 0.4) {
+            if (topObject !== lastSpoken) {
+                speak(topObject);
+                lastSpoken = topObject;
             }
-        }
-        
-        // Draw simple box
-        ctx.strokeStyle = '#00ff00';
-        ctx.lineWidth = 4;
-        ctx.strokeRect(top.bbox[0], top.bbox[1], top.bbox[2], top.bbox[3]);
-        
-    } else {
-        if (lastSpoken !== "unidentified") {
+            updateHistory(topObject);
+        } else if (lastSpoken !== "unidentified") {
             speak("unidentified");
             lastSpoken = "unidentified";
         }
-    }
+        
+        predictions.forEach(p => {
+            const [x, y, w, h] = p.bbox;
+            ctx.strokeStyle = '#00ff00';
+            ctx.lineWidth = 4;
+            ctx.strokeRect(x, y, w, h);
+        });
+    } else { lastSpoken = ""; }
     requestAnimationFrame(detect);
 }
 
 actionBtn.addEventListener('click', async () => {
     actionBtn.style.display = 'none';
-    statusText.innerText = 'Loading...';
+    statusText.innerText = 'Initializing...';
+    
     try {
         await setupCamera();
-        model = await cocoSsd.load();
+        model = await cocoSsd.load({base: 'mobilenet_v2'});
         statusText.innerText = 'System Ready';
+        speak("System ready. Scanning.");
         detect();
     } catch (err) {
-        statusText.innerText = 'Error: ' + err.message;
+        statusText.innerText = 'Error: Check Camera';
     }
 });
-        
