@@ -10,11 +10,12 @@ let model;
 let lastSpoken = "";
 let history = [];
 
-// 🔥 NEW: stability + performance controls
 let lastRun = 0;
-const DETECT_INTERVAL = 250; // 4x per second max
+const DETECT_INTERVAL = 250; // performance control (4 fps approx)
 
 let speechLock = false;
+
+// stability control
 let lastObjectStable = "";
 let stableCount = 0;
 
@@ -24,6 +25,7 @@ async function setupCamera() {
         audio: false
     });
     video.srcObject = stream;
+
     return new Promise((resolve) => {
         video.onloadedmetadata = resolve;
     });
@@ -59,7 +61,7 @@ function updateHistory(item) {
 async function detect(timestamp) {
     if (!model) return;
 
-    // 🧠 throttle detection (IMPORTANT for performance)
+    // throttle detection speed (prevents overload)
     if (timestamp - lastRun < DETECT_INTERVAL) {
         requestAnimationFrame(detect);
         return;
@@ -67,7 +69,6 @@ async function detect(timestamp) {
     lastRun = timestamp;
 
     const predictions = await model.detect(video);
-
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     if (predictions.length > 0) {
@@ -77,7 +78,7 @@ async function detect(timestamp) {
         const object = top.class;
         const confidence = top.score;
 
-        // 🔥 stability filter (prevents flickering speech)
+        // stability check (prevents flickering speech)
         if (object === lastObjectStable) {
             stableCount++;
         } else {
@@ -85,16 +86,25 @@ async function detect(timestamp) {
             lastObjectStable = object;
         }
 
-        // only speak if object is stable
+        // MAIN SPEECH LOGIC
         if (confidence > 0.5 && stableCount >= 3) {
             if (object !== lastSpoken && !speechLock) {
-                speak(object); // 👈 ORIGINAL COCO WORD (UNCHANGED)
+                speak(object); // ORIGINAL COCO WORD (UNCHANGED)
                 lastSpoken = object;
                 updateHistory(object);
             }
         }
 
-        // draw boxes
+        // LOW CONFIDENCE → obstacle ahead (instead of "unidentified object")
+        else if (confidence <= 0.5 && stableCount >= 3) {
+            if (lastSpoken !== "obstacle" && !speechLock) {
+                speak("obstacle ahead");
+                lastSpoken = "obstacle";
+                updateHistory("obstacle ahead");
+            }
+        }
+
+        // draw bounding boxes
         predictions.forEach(p => {
             if (p.score > 0.4) {
                 const [x, y, w, h] = p.bbox;
@@ -119,17 +129,19 @@ actionBtn.addEventListener('click', async () => {
 
     try {
         await setupCamera();
+
         model = await cocoSsd.load({ base: 'mobilenet_v2' });
 
         statusDot.classList.add('ready');
         statusText.innerText = 'Ready';
 
-        speak("System ready");
+        speak("System ready. Scanning.");
+
         detect();
 
     } catch (err) {
         statusText.innerText = 'Error';
-        speak("Camera error");
+        speak("Camera error. Please check permissions.");
         console.error(err);
     }
 });
