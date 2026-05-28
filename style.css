@@ -1,50 +1,27 @@
-/* Make the background black so it looks professional */
-body {
-    background-color: #000;
-    margin: 0;
-    padding: 0;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    min-height: 100vh;
-}
-
-/* This is the secret: give the container a large height */
+/* This makes the container take up most of the screen width */
 .video-container {
     position: relative;
-    width: 95%;
-    height: 70vh; /* Takes up 70% of your screen height */
-    margin: 10px auto;
-    border-radius: 20px;
+    width: 90%; 
+    max-width: 500px;
+    margin: 20px auto;
+    border: 3px solid #333; /* Adds a nice border */
+    border-radius: 15px;
     overflow: hidden;
-    background: #111;
 }
 
+/* This forces the video to fill that container completely */
 #webcam {
+    display: block;
     width: 100%;
-    height: 100%;
-    object-fit: cover; /* This makes the video fill the box without squishing */
+    height: auto;
+    background: #000;
 }
 
+/* This ensures the canvas draws exactly over the video */
 #output-canvas {
     position: absolute;
     top: 0;
     left: 0;
     width: 100%;
     height: 100%;
-}
-
-#action-btn {
-    padding: 20px 40px;
-    font-size: 20px;
-    background: #00ff00;
-    border: none;
-    border-radius: 50px;
-    cursor: pointer;
-}
-
-#status-text {
-    color: white;
-    margin-top: 10px;
 }
