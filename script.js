@@ -9,17 +9,8 @@ const objectsList = document.getElementById('objects-list');
 const warningOverlay = document.getElementById("camera-warning");
 
 let model;
-
-// =======================
-// STATE
-// =======================
-let lastSpokenTime = 0;
-let stableObject = "";
-let stableCount = 0;
-let lastSpeech = "";
-
-const REQUIRED_STABILITY = 3;
-const SPEAK_INTERVAL = 12000;
+let lastSpoken = "";
+let history = [];
 
 const FPS = 10;
 const interval = 1000 / FPS;
@@ -27,9 +18,10 @@ let lastTime = 0;
 
 let speechLock = false;
 
-// =======================
-// CAMERA
-// =======================
+/* =========================
+   CAMERA SETUP
+========================= */
+
 async function setupCamera() {
     const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: 'environment' },
@@ -47,9 +39,10 @@ async function setupCamera() {
     });
 }
 
-// =======================
-// SPEECH
-// =======================
+/* =========================
+   SPEECH SYSTEM
+========================= */
+
 function speak(text) {
     if (speechLock) return;
 
@@ -57,7 +50,7 @@ function speak(text) {
     window.speechSynthesis.cancel();
 
     const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = 1.05;
+    utterance.rate = 1.1;
 
     utterance.onend = () => {
         speechLock = false;
@@ -66,15 +59,17 @@ function speak(text) {
     window.speechSynthesis.speak(utterance);
 }
 
-// =======================
-// HISTORY
-// =======================
-let history = [];
+/* =========================
+   HISTORY SYSTEM
+========================= */
 
 function updateHistory(item) {
     if (history[0] !== item) {
         history.unshift(item);
-        if (history.length > 5) history.pop();
+
+        if (history.length > 5) {
+            history.pop();
+        }
 
         objectsList.innerHTML = history
             .map(i => `<li style="padding:5px;">${i}</li>`)
@@ -82,19 +77,20 @@ function updateHistory(item) {
     }
 }
 
-// =======================
-// BRIGHTNESS CHECK
-// =======================
+/* =========================
+   BRIGHTNESS CHECK
+========================= */
+
 function getBrightness(video) {
     const tempCanvas = document.createElement("canvas");
-    const tempCtx = tempCanvas.getContext("2d");
+    const ctx = tempCanvas.getContext("2d");
 
     tempCanvas.width = video.videoWidth;
     tempCanvas.height = video.videoHeight;
 
-    tempCtx.drawImage(video, 0, 0);
+    ctx.drawImage(video, 0, 0);
 
-    const frame = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
+    const frame = ctx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
 
     let total = 0;
 
@@ -105,9 +101,10 @@ function getBrightness(video) {
     return total / (frame.data.length / 4);
 }
 
-// =======================
-// DETECTION LOOP
-// =======================
+/* =========================
+   DETECTION LOOP
+========================= */
+
 async function detect(time) {
 
     if (!model) return;
@@ -119,219 +116,152 @@ async function detect(time) {
 
     lastTime = time;
 
-    // =======================
-    // LOW LIGHT WARNING
-    // =======================
+    /* =========================
+       LOW LIGHT (FIXED)
+    ========================= */
+
     const brightness = getBrightness(video);
 
-    if (brightness < 110) {
+    if (brightness < 30) {
+
         warningOverlay.classList.add("show");
+
+        if (lastSpoken !== "low light") {
+            speak("Low light detected");
+            lastSpoken = "low light";
+            updateHistory("Low light detected");
+        }
+
     } else {
+
         warningOverlay.classList.remove("show");
+
+        if (lastSpoken === "low light") {
+            lastSpoken = "";
+        }
     }
+
+    /* =========================
+       OBJECT DETECTION
+    ========================= */
 
     const predictions = await model.detect(video);
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    if (predictions.length === 0) {
-        stableObject = "";
-        stableCount = 0;
-        requestAnimationFrame(detect);
-        return;
-    }
+    if (predictions.length > 0) {
 
-    predictions.sort((a, b) => b.score - a.score);
+        predictions.sort((a, b) => b.score - a.score);
 
-    const top = predictions[0];
+        const top = predictions[0];
 
-    const object = top.class;
-    const confidence = top.score;
+        const object = top.class;
+        const confidence = top.score;
 
-    const [x, y, w, h] = top.bbox;
+        const [x, y, w, h] = top.bbox;
 
-    // =======================
-    // FILTER LOW CONFIDENCE
-    // =======================
-    if (confidence < 0.4) {
-        requestAnimationFrame(detect);
-        return;
-    }
+        let distance = "";
 
-    // =======================
-    // DISTANCE (STABLE)
-    // =======================
-    const area = w * h;
-    const normalized = area / (canvas.width * canvas.height);
+        if (w < 120) distance = "far";
+        else if (w < 250) distance = "near";
+        else distance = "very close";
 
-    let distance = "";
-
-    if (normalized < 0.02) distance = "far";
-    else if (normalized < 0.08) distance = "near";
-    else distance = "very close";
-
-    // =======================
-    // DIRECTION
-    // =======================
-    const centerX = x + w / 2;
-    const mid = canvas.width / 2;
-    const deadZone = canvas.width * 0.12;
-
-    let direction = "";
-
-    if (centerX < mid - deadZone) direction = "on your left";
-    else if (centerX > mid + deadZone) direction = "on your right";
-    else direction = "in front";
-
-    // =======================
-    // ALLOWED OBJECTS ONLY
-    // =======================
-    const allowedObjects = [
-        "person",
-        "chair",
-        "couch",
-        "bed",
-        "bottle",
-        "laptop",
-        "cell phone",
-        "tv"
-    ];
-
-    if (!allowedObjects.includes(object)) {
-        requestAnimationFrame(detect);
-        return;
-    }
-
-    // =======================
-    // STABILITY SYSTEM
-    // =======================
-    const speechText = `${object} ${distance} ${direction}`;
-
-    if (stableObject === speechText) {
-        stableCount++;
-    } else {
-        stableObject = speechText;
-        stableCount = 0;
-    }
-
-    const now = Date.now();
-
-    const canSpeak =
-        stableCount >= REQUIRED_STABILITY &&
-        (now - lastSpokenTime > SPEAK_INTERVAL);
-
-    // =======================
-    // CONFIDENCE LOGIC
-    // =======================
-    let finalSpeech = "";
-
-    if (confidence > 0.75) {
-        finalSpeech = speechText;
-    }
-    else if (confidence > 0.55) {
-        finalSpeech = `possible ${object} ahead`;
-    }
-    else {
-        finalSpeech = `object detected ahead`;
-    }
-
-    if (finalSpeech && canSpeak && !speechLock && finalSpeech !== lastSpeech) {
-        speak(finalSpeech);
-
-        lastSpeech = finalSpeech;
-        lastSpokenTime = now;
-
-        updateHistory(finalSpeech);
-    }
-
-    // =======================
-    // OBSTACLE WARNING
-    // =======================
-    const isClose = normalized > 0.1;
-
-    if (isClose && stableCount >= 2 && !speechLock) {
-        if (lastSpeech !== "obstacle ahead") {
-            speak("obstacle ahead");
-            updateHistory("obstacle ahead");
-            lastSpeech = "obstacle ahead";
+        /* obstacle warning */
+        if (w > 320 && !speechLock) {
+            if (lastSpoken !== "obstacle ahead") {
+                speak("obstacle ahead");
+                lastSpoken = "obstacle ahead";
+                updateHistory("obstacle ahead");
+            }
         }
+
+        /* normal speech */
+        else if (confidence > 0.6) {
+
+            const speechText = `${object} ${distance}`;
+
+            if (speechText !== lastSpoken && !speechLock) {
+                speak(speechText);
+                lastSpoken = speechText;
+                updateHistory(speechText);
+            }
+        }
+
+        /* =========================
+           DRAW MARKERS
+        ========================= */
+
+        predictions.forEach(p => {
+
+            if (p.score > 0.5) {
+
+                const [x, y, w, h] = p.bbox;
+
+                const centerX = x + w / 2;
+                const centerY = y + h / 2;
+
+                const size = 20;
+
+                ctx.strokeStyle = '#00ff00';
+                ctx.lineWidth = 3;
+
+                ctx.beginPath();
+                ctx.moveTo(centerX - size, centerY);
+                ctx.lineTo(centerX + size, centerY);
+                ctx.stroke();
+
+                ctx.beginPath();
+                ctx.moveTo(centerX, centerY - size);
+                ctx.lineTo(centerX, centerY + size);
+                ctx.stroke();
+
+                ctx.fillStyle = '#00ff00';
+                ctx.font = '16px Arial';
+
+                ctx.fillText(
+                    `${p.class} ${(p.score * 100).toFixed(0)}%`,
+                    centerX + 25,
+                    centerY - 10
+                );
+            }
+        });
+
+    } else {
+        lastSpoken = "";
     }
-
-    // =======================
-    // DRAW CORNER HUD
-    // =======================
-    predictions.forEach(p => {
-
-        if (p.score < 0.5) return;
-
-        const [x, y, w, h] = p.bbox;
-        const c = 20;
-
-        ctx.strokeStyle = "#00ff00";
-        ctx.lineWidth = 3;
-
-        ctx.beginPath();
-        ctx.moveTo(x, y + c);
-        ctx.lineTo(x, y);
-        ctx.lineTo(x + c, y);
-        ctx.stroke();
-
-        ctx.beginPath();
-        ctx.moveTo(x + w - c, y);
-        ctx.lineTo(x + w, y);
-        ctx.lineTo(x + w, y + c);
-        ctx.stroke();
-
-        ctx.beginPath();
-        ctx.moveTo(x, y + h - c);
-        ctx.lineTo(x, y + h);
-        ctx.lineTo(x + c, y + h);
-        ctx.stroke();
-
-        ctx.beginPath();
-        ctx.moveTo(x + w - c, y + h);
-        ctx.lineTo(x + w, y + h);
-        ctx.lineTo(x + w, y + h - c);
-        ctx.stroke();
-
-        ctx.fillStyle = "#00ff00";
-        ctx.font = "14px Arial";
-
-        ctx.fillText(
-            `${p.class} ${(p.score * 100).toFixed(0)}%`,
-            x,
-            y > 20 ? y - 8 : 20
-        );
-    });
 
     requestAnimationFrame(detect);
 }
 
-// =======================
-// START
-// =======================
+/* =========================
+   START BUTTON
+========================= */
+
 actionBtn.addEventListener('click', async () => {
 
-    actionBtn.style.display = "none";
-    statusText.innerText = "Initializing...";
+    actionBtn.style.display = 'none';
+    statusText.innerText = 'Initializing...';
 
     try {
+
         await setupCamera();
 
         model = await cocoSsd.load({
-            base: "mobilenet_v2"
+            base: 'mobilenet_v2'
         });
 
-        statusDot.classList.add("ready");
-        statusText.innerText = "Ready";
+        statusDot.classList.add('ready');
+        statusText.innerText = 'Ready';
 
-        speak("Coco Vision ready. Scanning environment.");
+        speak("System ready. Scanning.");
 
         detect(0);
 
     } catch (err) {
+
         console.error(err);
-        statusText.innerText = "Error";
-        speak("Camera error.");
+        statusText.innerText = "Camera Error: " + err.name;
+
+        speak("Camera error. Please allow permissions or use a supported browser.");
     }
 });
