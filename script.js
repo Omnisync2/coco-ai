@@ -24,9 +24,7 @@ let speechLock = false;
 
 async function setupCamera() {
     const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-            facingMode: 'environment'
-        },
+        video: { facingMode: 'environment' },
         audio: false
     });
 
@@ -34,6 +32,11 @@ async function setupCamera() {
 
     return new Promise((resolve) => {
         video.onloadedmetadata = () => {
+
+            // IMPORTANT: FIX CANVAS SIZE
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+
             resolve();
         };
     });
@@ -80,7 +83,7 @@ function updateHistory(item) {
 }
 
 /* =========================
-   BRIGHTNESS CHECK (NEW)
+   BRIGHTNESS CHECK
 ========================= */
 
 function getBrightness(video) {
@@ -104,14 +107,13 @@ function getBrightness(video) {
 }
 
 /* =========================
-   AI DETECTION LOOP
+   DETECTION LOOP
 ========================= */
 
 async function detect(time) {
 
     if (!model) return;
 
-    // FPS LIMITER
     if (time - lastTime < interval) {
         requestAnimationFrame(detect);
         return;
@@ -119,10 +121,7 @@ async function detect(time) {
 
     lastTime = time;
 
-    /* =========================
-       LOW LIGHT WARNING (NEW)
-    ========================= */
-
+    /* LOW LIGHT WARNING */
     const brightness = getBrightness(video);
 
     if (brightness < 45) {
@@ -178,24 +177,44 @@ async function detect(time) {
             }
         }
 
+        /* =========================
+           PLUS SIGN MARKER (NEW)
+        ========================= */
+
         predictions.forEach(p => {
 
-            if (p.score > 0.4) {
+            if (p.score > 0.5) {
 
                 const [x, y, w, h] = p.bbox;
 
+                const centerX = x + w / 2;
+                const centerY = y + h / 2;
+
+                const size = 20;
+
                 ctx.strokeStyle = '#00ff00';
-                ctx.lineWidth = 4;
+                ctx.lineWidth = 3;
 
-                ctx.strokeRect(x, y, w, h);
+                // horizontal line
+                ctx.beginPath();
+                ctx.moveTo(centerX - size, centerY);
+                ctx.lineTo(centerX + size, centerY);
+                ctx.stroke();
 
+                // vertical line
+                ctx.beginPath();
+                ctx.moveTo(centerX, centerY - size);
+                ctx.lineTo(centerX, centerY + size);
+                ctx.stroke();
+
+                // label
                 ctx.fillStyle = '#00ff00';
-                ctx.font = '18px Arial';
+                ctx.font = '16px Arial';
 
                 ctx.fillText(
                     `${p.class} ${(p.score * 100).toFixed(0)}%`,
-                    x,
-                    y > 10 ? y - 5 : 10
+                    centerX + 25,
+                    centerY - 10
                 );
             }
         });
